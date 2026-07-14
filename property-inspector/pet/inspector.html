@@ -4,17 +4,23 @@
   <meta charset="UTF-8">
   <meta name="viewport"
     content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover" />
-  <title>Token Pet</title>
+  <title>Agent Pets</title>
   <link rel="stylesheet" href="../../libs/css/uspi.css">
   <style>
     .pet-preview { display: flex; justify-content: center; padding: 10px 0; }
     .pet-preview canvas { width: 96px; height: 96px; border-radius: 12px; background: #1e1f22; }
-    .species-row { display: flex; gap: 8px; }
-    .species-opt {
-      flex: 1; text-align: center; padding: 8px 4px; border-radius: 8px;
+    .slot-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .slot-opt {
+      display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
       border: 2px solid transparent; background: #2a2c31; cursor: pointer; color: #ddd;
     }
-    .species-opt.active { border-color: #4a9df0; color: #fff; }
+    .slot-opt.active { border-color: #4a9df0; color: #fff; }
+    .slot-idx { font-weight: 700; opacity: .7; min-width: 26px; }
+    .slot-main { flex: 1; display: flex; flex-direction: column; }
+    .slot-title { font-size: 12px; }
+    .slot-sub { font-size: 10px; opacity: .6; }
+    .slot-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+    .empty-hint { color: #8b93a1; font-size: 12px; text-align: center; padding: 12px 0; }
   </style>
 </head>
 <body>
@@ -24,12 +30,13 @@
 
     <form id="property-inspector">
       <div class="uspi-item">
-        <div class="uspi-item-label" data-localize>Pet</div>
+        <div class="uspi-item-label">Slot</div>
         <div class="uspi-item-value">
-          <div class="species-row" id="speciesRow"></div>
+          <div class="slot-list" id="slotList"></div>
+          <div class="empty-hint" id="emptyHint">Loading pets…</div>
         </div>
       </div>
-      <input type="hidden" name="species" id="species" value="slime">
+      <input type="hidden" name="slot" id="slot" value="0">
     </form>
 
   </div>

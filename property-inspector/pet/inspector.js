@@ -1,77 +1,130 @@
-let ACTION_SETTING = { species: 'slime' };
+let ACTION_SETTING = { slot: 0 };
 let form = '';
 let previewT = 0;
+let POOL = [];   // 当前宠物池摘要
+let lang = 'en';
+
+const STATUS_COLOR = { running: '#37c057', waiting: '#f0a83a', completed: '#4a9df0' };
 
 $UD.connect();
 
 $UD.onConnected(() => {
   form = document.querySelector('#property-inspector');
-
-  const lang = ($UD.language && $UD.language.indexOf('zh') === 0) ? 'zh' : 'en';
-
-  // 渲染物种选择(名字为自动随机生成,PI 只选物种)
-  const row = document.querySelector('#speciesRow');
-  PetArt.species.forEach((sp) => {
-    const div = document.createElement('div');
-    div.className = 'species-opt';
-    div.dataset.species = sp;
-    div.textContent = PetArt.speciesName[sp][lang];
-    div.addEventListener('click', () => selectSpecies(sp));
-    row.appendChild(div);
-  });
+  lang = ($UD.language && $UD.language.indexOf('zh') === 0) ? 'zh' : 'en';
 
   document.querySelector('.uspi-wrapper').classList.remove('hidden');
+  document.querySelector('.uspi-item-label').textContent = (lang === 'zh') ? '槽位' : 'Slot';
 
-  markActive();
+  requestPool();
+  // 池会随时间增长,定期刷新一次列表
+  setInterval(requestPool, 5000);
   startPreview();
 });
-
-function selectSpecies(sp) {
-  ACTION_SETTING.species = sp;
-  document.querySelector('#species').value = sp;
-  markActive();
-  send();
-}
-
-function markActive() {
-  document.querySelectorAll('.species-opt').forEach((el) => {
-    el.classList.toggle('active', el.dataset.species === ACTION_SETTING.species);
-  });
-}
-
-function send() {
-  $UD.sendParamFromPlugin(ACTION_SETTING);
-}
 
 // 初始化参数
 $UD.onAdd((o) => { if (o && o.param) restore(o.param); });
 $UD.onParamFromApp((o) => { if (o && o.param) restore(o.param); });
 
-function restore(p) {
-  ACTION_SETTING = Object.assign({ species: 'slime' }, p);
-  if (form) {
-    document.querySelector('#species').value = ACTION_SETTING.species || 'slime';
-    markActive();
+// 主服务回传宠物池摘要
+$UD.onSendToPropertyInspector((o) => {
+  const p = o && o.payload;
+  if (p && p.type === 'pool' && Array.isArray(p.pool)) { POOL = p.pool; renderList(); }
+});
+// 兜底:也接受全局设置里的池
+$UD.onDidReceiveGlobalSettings((o) => {
+  const data = o && (o.settings || o.param);
+  if (data && Array.isArray(data.pool)) {
+    POOL = data.pool.map((m, i) => ({
+      slot: i, species: m.species, agent: m.agent, sid: m.sid,
+      petName: m.petName, status: m.status, accumSec: Math.round(m.accumSec || 0),
+    }));
+    renderList();
   }
+});
+
+function requestPool() {
+  $UD.sendToPlugin({ type: 'getPool' });
+  $UD.getGlobalSettings();
 }
 
-// 配置面板里的实时预览(展示当前物种在“成年”阶段、工作状态的样子)
+function restore(p) {
+  ACTION_SETTING = Object.assign({ slot: 0 }, p);
+  if (form) document.querySelector('#slot').value = ACTION_SETTING.slot;
+  markActive();
+}
+
+function selectSlot(slot) {
+  ACTION_SETTING.slot = slot;
+  document.querySelector('#slot').value = slot;
+  markActive();
+  send();
+}
+
+function send() { $UD.sendParamFromPlugin(ACTION_SETTING); }
+
+function fmtClock(sec) {
+  const s = Math.floor(sec % 60), m = Math.floor((sec / 60) % 60), h = Math.floor(sec / 3600);
+  const pad = (n) => (n < 10 ? '0' + n : '' + n);
+  if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
+  if (m > 0) return `${m}:${pad(s)}`;
+  return `0:${pad(s)}`;
+}
+
+function renderList() {
+  const list = document.querySelector('#slotList');
+  const hint = document.querySelector('#emptyHint');
+  list.innerHTML = '';
+  if (!POOL.length) { hint.style.display = ''; hint.textContent = (lang === 'zh') ? '暂无宠物…' : 'No pets yet…'; return; }
+  hint.style.display = 'none';
+  POOL.forEach((m) => {
+    const div = document.createElement('div');
+    div.className = 'slot-opt';
+    div.dataset.slot = m.slot;
+    const spName = (PetArt.speciesName[m.species] || {})[lang] || m.species;
+    div.innerHTML =
+      `<div class="slot-dot" style="background:${STATUS_COLOR[m.status] || '#888'}"></div>` +
+      `<div class="slot-idx">#${m.slot + 1}</div>` +
+      `<div class="slot-main">` +
+        `<div class="slot-title">${m.agent} · ${spName}</div>` +
+        `<div class="slot-sub">${m.sid} · ${fmtClock(m.accumSec)}</div>` +
+      `</div>`;
+    div.addEventListener('click', () => selectSlot(m.slot));
+    list.appendChild(div);
+  });
+  markActive();
+}
+
+function markActive() {
+  document.querySelectorAll('.slot-opt').forEach((el) => {
+    el.classList.toggle('active', Number(el.dataset.slot) === Number(ACTION_SETTING.slot));
+  });
+}
+
+// 预览:画出所选槽位宠物当前形态(工作状态动画)
 function startPreview() {
   const cv = document.querySelector('#preview');
   const ctx = cv.getContext('2d');
-  const growth = PetStages.growthFromSeconds(20000); // 预览一个成长较高的形态
   setInterval(() => {
     previewT += 0.12;
     ctx.clearRect(0, 0, 144, 144);
     const bg = ctx.createLinearGradient(0, 0, 0, 144);
     bg.addColorStop(0, '#24262b'); bg.addColorStop(1, '#15161a');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, 144, 144);
+
+    const m = POOL.find((x) => Number(x.slot) === Number(ACTION_SETTING.slot));
+    if (!m) {
+      ctx.fillStyle = '#5a6270'; ctx.textAlign = 'center';
+      ctx.font = `600 40px 'Source Han Sans SC', sans-serif`;
+      ctx.fillText('#' + (Number(ACTION_SETTING.slot) + 1), 72, 78);
+      ctx.fillStyle = '#8b93a1'; ctx.font = `12px 'Source Han Sans SC', sans-serif`;
+      ctx.fillText(lang === 'zh' ? '等待宠物…' : 'No pet yet', 72, 104);
+      return;
+    }
+    const g = PetStages.growthFromSeconds(m.accumSec);
+    const behavior = m.status === 'waiting' ? 'idle' : (m.status === 'completed' ? 'alert' : 'work');
     PetArt.drawPet(ctx, {
-      species: ACTION_SETTING.species || 'slime',
-      growth: growth,
-      behavior: 'work',
-      phase: previewT,
-      cx: 72, cy: 74, unit: 30,
+      species: m.species, growth: g, behavior: behavior,
+      phase: previewT, cx: 72, cy: 78, unit: 26,
     });
   }, 120);
 }

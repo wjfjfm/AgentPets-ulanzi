@@ -1,14 +1,18 @@
 /**
- * 主服务：Token 电子宠物
- * - 维护每个按键(context)一只 Pet
- * - 全局渲染循环:按 FPS 重绘并推送图标;运行中的宠物累加运行时间(驱动成长)
- * - 手势:用 keyDown/keyUp 自行判定 —— 短按=运行/暂停切换,长按 3 秒=重置
- *   (因此忽略 onRun,避免与自定义单击判定重复触发)
- * - 定期把运行进度持久化到上位机(setSettings)
+ * 主服务:Agent Pets(Coordinator + 显示槽位)
+ * ----------------------------------------------------------------------------
+ * - 全局单例 Coordinator 维护「宠物池」(Demo 每 10 分钟生成一只),统一维护所有
+ *   宠物的 meta(agent/session/对话/运行时长/token/类型/状态)。
+ * - 每个按键持有一个 PetView,只保存一个 slot 索引;渲染时从 Coordinator 取该
+ *   slot 的 meta 快照画出图标。多个按键可指向同一 slot,显示同一只宠物。
+ * - 手势:短按 = 切换到下一个槽位(浏览池中宠物);长按 3 秒 = 重置 demo 宠物池。
+ * - 宠物池写入「全局设置」,供 PI(配置面板)读取并列出可选槽位。
  */
-const PETS = {};
-const FPS = 6;                 // 每秒推送帧数(兼顾流畅与流量)
-const SAVE_EVERY_MS = 5000;    // 持久化间隔
+const Coord = window.PetCoordinator;
+const VIEWS = {};
+
+const FPS = 6;                 // 每秒推送帧数
+const SAVE_EVERY_MS = 8000;    // 全局池持久化间隔
 const CLICK_MAX_MS = 400;      // 短按阈值
 
 let lastFrame = 0;
@@ -17,72 +21,91 @@ let lastSave = 0;
 $UD.connect('com.ulanzi.ulanzistudio.tokenpet');
 
 $UD.onConnected(() => {
+  Coord.init(nowMs());
+  $UD.getGlobalSettings();  // 尝试恢复已保存的宠物池
   startLoop();
+});
+
+// 恢复全局宠物池
+$UD.onDidReceiveGlobalSettings((jsn) => {
+  const data = jsn && (jsn.settings || jsn.param);
+  if (data && Coord.restore(data, nowMs())) {
+    for (const c in VIEWS) pushIcon(VIEWS[c]);
+  }
 });
 
 // 配置到按键
 $UD.onAdd((jsn) => {
   const context = jsn.context;
-  if (!PETS[context]) {
-    const pet = new Pet(context);
-    pet.setLang($UD.language);
-    PETS[context] = pet;
+  if (!VIEWS[context]) {
+    const view = new PetView(context);
+    view.setLang($UD.language);
+    VIEWS[context] = view;
   }
-  const pet = PETS[context];
-  if (jsn.param) pet.applySettings(jsn.param);
-  $UD.getSettings(context); // 拉取已保存的运行进度
+  const view = VIEWS[context];
+  if (jsn.param) view.applySettings(jsn.param);
+  $UD.getSettings(context); // 拉取该按键已保存的 slot
 });
 
-// 上位机回传已保存参数
+// 上位机回传该按键已保存参数(slot)
 $UD.onDidReceiveSettings((jsn) => {
-  const pet = PETS[jsn.context];
-  if (pet && jsn.param) { pet.applySettings(jsn.param); pushIcon(pet); }
+  const view = VIEWS[jsn.context];
+  if (view && jsn.param) { view.applySettings(jsn.param); pushIcon(view); }
 });
 
 // 活跃状态
 $UD.onSetActive((jsn) => {
-  const pet = PETS[jsn.context];
-  if (pet && jsn.active && jsn.active.toString() === 'true') pushIcon(pet);
+  const view = VIEWS[jsn.context];
+  if (view && jsn.active && jsn.active.toString() === 'true') pushIcon(view);
 });
 
-// PI 修改了物种 / 名字
+// PI 修改了 slot
 $UD.onParamFromApp((jsn) => applyParam(jsn));
 $UD.onParamFromPlugin((jsn) => applyParam(jsn));
 
 function applyParam(jsn) {
-  const pet = PETS[jsn.context];
-  if (!pet || !jsn.param) return;
-  pet.applySettings(jsn.param);
-  save(pet);
-  pushIcon(pet);
+  const view = VIEWS[jsn.context];
+  if (!view || !jsn.param) return;
+  view.applySettings(jsn.param);
+  save(view);
+  pushIcon(view);
 }
 
-// ---- 手势:短按/长按 ----
+// PI 请求当前宠物池摘要(用于列出槽位)
+$UD.onSendToPlugin((jsn) => {
+  const p = jsn && jsn.payload;
+  if (p && p.type === 'getPool') {
+    $UD.sendToPropertyInspector({ type: 'pool', pool: Coord.summaries() }, jsn.context);
+  }
+});
+
+// ---- 手势:短按切槽 / 长按重置池 ----
 $UD.onKeyDown((jsn) => {
-  const pet = PETS[jsn.context];
-  if (pet) pet.beginHold(nowMs());
+  const view = VIEWS[jsn.context];
+  if (view) view.beginHold(nowMs());
 });
 
 $UD.onKeyUp((jsn) => {
-  const pet = PETS[jsn.context];
-  if (!pet) return;
-  const held = nowMs() - pet.holdStart;
-  pet.endHold();
-  if (held >= pet.HOLD_RESET_MS) {
+  const view = VIEWS[jsn.context];
+  if (!view) return;
+  const held = nowMs() - view.holdStart;
+  view.endHold();
+  if (held >= view.HOLD_RESET_MS) {
     // 已在循环中触发重置
-  } else if (held <= CLICK_MAX_MS || held < pet.HOLD_RESET_MS) {
-    pet.forceSwitch(nowMs());   // 短按:立即随机切换状态+任务
-    save(pet);
+  } else {
+    // 短按:切换到下一个槽位(在池范围内循环)
+    const n = Coord.slotCount();
+    if (n > 0) view.slot = (view.slot + 1) % n;
+    save(view);
   }
-  pushIcon(pet);
+  pushIcon(view);
 });
 
 // 移除配置
 $UD.onClear((jsn) => {
   if (!jsn.param) return;
   for (let i = 0; i < jsn.param.length; i++) {
-    const context = jsn.param[i].context;
-    delete PETS[context];
+    delete VIEWS[jsn.param[i].context];
   }
 });
 
@@ -96,37 +119,49 @@ function startLoop() {
     lastFrame = now;
     const phase = now / 1000;
 
-    const contexts = Object.keys(PETS);
+    // 长按满 3 秒 -> 重置整个 demo 宠物池
+    let resetTriggered = false;
+    const contexts = Object.keys(VIEWS);
     for (let i = 0; i < contexts.length; i++) {
-      const pet = PETS[contexts[i]];
-
-      // 长按满 3 秒 -> 重置
-      if (pet.holdStart && pet.holdProgress(now) >= 1) {
-        pet.reset();
-        save(pet);
-      } else {
-        pet.maybeSwitch(now); // 到点随机切换状态+任务
-        pet.tick(dt);         // 持续累加时间(驱动成长)
-      }
-      pushIcon(pet, phase);
+      const v = VIEWS[contexts[i]];
+      if (v.holdStart && v.holdProgress(now) >= 1) { resetTriggered = true; break; }
+    }
+    if (resetTriggered) {
+      Coord.reset(now);
+      for (let i = 0; i < contexts.length; i++) VIEWS[contexts[i]].endHold();
+    } else {
+      Coord.tick(now, dt); // 推进宠物池(生成/成长/状态切换)
     }
 
-    // 周期持久化
+    // 池结构变化(生成新宠物/重置) -> 持久化到全局设置,让 PI 能看到
+    if (Coord.dirty) { Coord.dirty = false; saveGlobal(); }
+
+    for (let i = 0; i < contexts.length; i++) {
+      pushIcon(VIEWS[contexts[i]], phase);
+    }
+
+    // 周期持久化(成长进度)
     if (now - lastSave >= SAVE_EVERY_MS) {
       lastSave = now;
-      for (let i = 0; i < contexts.length; i++) save(PETS[contexts[i]]);
+      saveGlobal();
+      for (let i = 0; i < contexts.length; i++) save(VIEWS[contexts[i]]);
     }
   }, Math.round(1000 / FPS));
 }
 
-function pushIcon(pet, phase) {
+function pushIcon(view, phase) {
   const p = phase != null ? phase : nowMs() / 1000;
-  const data = pet.render(nowMs(), p);
-  $UD.setBaseDataIcon(pet.context, data, ''); // 名字/时间已画在画布上,不用上位机叠字
+  const meta = Coord.get(view.slot);
+  const data = view.render(meta, nowMs(), p);
+  $UD.setBaseDataIcon(view.context, data, '');
 }
 
-function save(pet) {
-  $UD.setSettings(pet.serialize(), pet.context);
+function save(view) {
+  $UD.setSettings(view.serialize(), view.context);
+}
+
+function saveGlobal() {
+  $UD.setGlobalSettings(Coord.serialize());
 }
 
 function nowMs() { return Date.now(); }
