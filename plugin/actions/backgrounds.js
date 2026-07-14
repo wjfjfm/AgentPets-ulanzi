@@ -7,11 +7,18 @@
  * 背景在「没有宠物」时也照常显示;有宠物时与宠物一同显示。
  * 主题可为动态(用 phase 驱动动画)或静态。前景/背景不单独设置,选一套即可。
  *
+ * 【文字安全区】顶部约 0~84px(SCRIM_H)承载 UI 文字(表头/问题行/反馈行)。
+ *   设计背景时,「房子/狗窝/篱笆/太阳」等主要实心物件应放在下方 Pet 区
+ *   (y ≳ PET_TOP),避免压住文字导致难以辨识;天空渐变、粒子等低对比氛围
+ *   元素可铺满整块(顶部另有遮罩压暗)。
+ *
  * 用法:
  *   PetBackgrounds.drawBack(ctx, key, {phase, w, h})
  *   PetBackgrounds.drawFront(ctx, key, {phase, w, h})
  */
 (function () {
+  // 主要物件的顶边下限:低于此线才不会压到顶部文字
+  const PET_TOP = 84;
   // 稳定伪随机(按索引,保证每帧位置不跳变)
   function rnd(i) {
     const x = Math.sin(i * 12.9898) * 43758.5453;
@@ -182,20 +189,23 @@
       back: function (ctx, cfg) {
         const { phase, w, h } = cfg;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#8fd0ff'); g.addColorStop(0.58, '#cdeeff');
-        g.addColorStop(0.58, '#a6e07a'); g.addColorStop(1, '#79c052');
+        g.addColorStop(0, '#8fd0ff'); g.addColorStop(0.62, '#cdeeff');
+        g.addColorStop(0.62, '#a6e07a'); g.addColorStop(1, '#79c052');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        // 太阳:低垂近地平线,落在 Pet 区(不压顶部文字)
         ctx.save(); ctx.globalAlpha = 0.95; ctx.fillStyle = '#fff2b0';
-        ctx.beginPath(); ctx.arc(w - 28, 26, 13, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.beginPath(); ctx.arc(w - 26, PET_TOP + 12, 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        // 远山(位于地平线以下)
         ctx.fillStyle = '#8ccf63';
-        ctx.beginPath(); ctx.moveTo(0, h * 0.66);
-        ctx.quadraticCurveTo(w * 0.3, h * 0.54, w * 0.6, h * 0.66);
-        ctx.quadraticCurveTo(w * 0.85, h * 0.76, w, h * 0.62);
+        ctx.beginPath(); ctx.moveTo(0, h * 0.72);
+        ctx.quadraticCurveTo(w * 0.3, h * 0.62, w * 0.6, h * 0.72);
+        ctx.quadraticCurveTo(w * 0.85, h * 0.8, w, h * 0.68);
         ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+        // 飘云:压低到地平线附近,避开文字区
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         for (let i = 0; i < 3; i++) {
           const cx = ((i * 58 + phase * 6) % (w + 60)) - 30;
-          cloud(ctx, cx, 20 + i * 9, 9 + i * 2);
+          cloud(ctx, cx, PET_TOP + 2 + i * 6, 6 + i * 1.5);
         }
       },
       front: function (ctx, cfg) {
@@ -216,10 +226,10 @@
       back: function (ctx, cfg) {
         const { w, h } = cfg;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#a9dbff'); g.addColorStop(0.55, '#dff2c4');
-        g.addColorStop(0.55, '#8ccf5c'); g.addColorStop(1, '#6bb544');
+        g.addColorStop(0, '#a9dbff'); g.addColorStop(0.6, '#dff2c4');
+        g.addColorStop(0.6, '#8ccf5c'); g.addColorStop(1, '#6bb544');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        const topY = 74, botY = 108;
+        const topY = PET_TOP + 8, botY = 128;
         ctx.fillStyle = '#f4f1e7'; ctx.strokeStyle = '#c9c2ad'; ctx.lineWidth = 1;
         ctx.fillRect(0, topY + 8, w, 5); ctx.fillRect(0, botY - 12, w, 5);
         for (let x = 2; x < w; x += 18) {
@@ -232,38 +242,39 @@
       front: null,
     },
 
-    // 房子:暖色墙面 + 采光窗 + 木地板
+    // 房子:暖色墙面 + 采光窗 + 木地板(窗户下移到 Pet 区)
     house: {
       back: function (ctx, cfg) {
         const { w, h } = cfg;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#f0d3a0'); g.addColorStop(0.72, '#e6bd78');
-        g.addColorStop(0.72, '#b3783f'); g.addColorStop(1, '#9c6533');
+        g.addColorStop(0, '#f0d3a0'); g.addColorStop(0.82, '#e6bd78');
+        g.addColorStop(0.82, '#b3783f'); g.addColorStop(1, '#9c6533');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        ctx.fillStyle = '#bfe6ff'; ctx.fillRect(14, 20, 42, 34);
-        ctx.strokeStyle = '#7a5a34'; ctx.lineWidth = 3; ctx.strokeRect(14, 20, 42, 34);
+        const wx = 12, wy = PET_TOP + 4, ww = 40, wh = 34;
+        ctx.fillStyle = '#bfe6ff'; ctx.fillRect(wx, wy, ww, wh);
+        ctx.strokeStyle = '#7a5a34'; ctx.lineWidth = 3; ctx.strokeRect(wx, wy, ww, wh);
         ctx.beginPath();
-        ctx.moveTo(35, 20); ctx.lineTo(35, 54);
-        ctx.moveTo(14, 37); ctx.lineTo(56, 37); ctx.stroke();
+        ctx.moveTo(wx + ww / 2, wy); ctx.lineTo(wx + ww / 2, wy + wh);
+        ctx.moveTo(wx, wy + wh / 2); ctx.lineTo(wx + ww, wy + wh / 2); ctx.stroke();
       },
       front: null,
     },
 
-    // 狗窝:昏暗暖调 + 带屋顶和拱形门洞的小窝(宠物坐在门口)
+    // 狗窝:昏暗暖调 + 带屋顶和拱形门洞的小窝(整体位于 Pet 区,宠物坐在门口)
     kennel: {
       back: function (ctx, cfg) {
         const { w, h } = cfg;
         vgrad(ctx, w, h, '#3a2c22', '#241a14');
-        const bx = 28, bw = w - 56, by = 70, bh = 64;
+        const bx = 30, bw = w - 60, by = PET_TOP + 12, bh = h - by;
         ctx.fillStyle = '#c98a4e'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = '#8b4f2a';
-        ctx.beginPath(); ctx.moveTo(bx - 8, by); ctx.lineTo(w / 2, by - 30);
+        ctx.beginPath(); ctx.moveTo(bx - 8, by); ctx.lineTo(w / 2, by - 16);
         ctx.lineTo(bx + bw + 8, by); ctx.closePath(); ctx.fill();
         ctx.fillStyle = '#1c130d';
-        const dw = bw * 0.52, dx = w / 2 - dw / 2, dy = by + bh, dtop = by + 16;
+        const dw = bw * 0.5, dx = w / 2 - dw / 2, dy = by + bh, dtop = by + 12;
         ctx.beginPath();
         ctx.moveTo(dx, dy); ctx.lineTo(dx, dtop + dw / 2);
-        ctx.quadraticCurveTo(w / 2, dtop - 8, dx + dw, dtop + dw / 2);
+        ctx.quadraticCurveTo(w / 2, dtop - 6, dx + dw, dtop + dw / 2);
         ctx.lineTo(dx + dw, dy); ctx.closePath(); ctx.fill();
       },
       front: null,
