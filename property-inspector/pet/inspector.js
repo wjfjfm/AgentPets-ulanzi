@@ -55,7 +55,7 @@ $UD.onDidReceiveGlobalSettings((o) => {
   const data = o && (o.settings || o.param);
   if (data && Array.isArray(data.pool)) {
     POOL = data.pool.map((m, i) => ({
-      slot: i, species: m.species, agent: m.agent, sid: m.sid,
+      slot: i, species: m.species, form: m.form, agent: m.agent, sid: m.sid,
       petName: m.petName, status: m.status, accumSec: Math.round(m.accumSec || 0),
     }));
     renderList();
@@ -142,7 +142,7 @@ function startPreview() {
 
     const m = POOL.find((x) => Number(x.slot) === Number(ACTION_SETTING.slot));
     if (m) {
-      const g = PetStages.growthFromSeconds(m.accumSec);
+      const g = PetEvolution.growth(m.form, PetStages.tokensFromSeconds(m.accumSec), m.species);
       const behavior = m.status === 'waiting' ? 'idle' : (m.status === 'completed' ? 'alert' : 'work');
       PetArt.drawPet(ctx, {
         species: m.species, growth: g, behavior: behavior,

@@ -21,6 +21,7 @@
 (function () {
   const S = window.PetStages;
   const Art = window.PetArt;
+  const Ev = window.PetEvolution;
   const Bg = window.PetBackgrounds;
 
   const SIZE = 144;
@@ -278,7 +279,8 @@
   PetView.prototype.render = function (meta, now, phase) {
     if (!meta) return this.renderEmpty(now, phase);
     const ctx = this.ctx;
-    const g = S.growthFromSeconds(meta.accumSec);
+    // 成长由「当前进化形态 + 累计 token」派生(形态决定阶段/部件,token 决定形态内体型)
+    const g = Ev.growth(meta.form, S.tokensFromSeconds(meta.accumSec), meta.species);
     const st = STATUS[meta.status] ? meta.status : 'running';
     const smeta = STATUS[st];
     const cfg = { phase: phase, w: SIZE, h: SIZE };

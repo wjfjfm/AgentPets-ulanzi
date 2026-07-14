@@ -16,6 +16,7 @@
   const Demo = window.PetDemo;
   const Art = window.PetArt;
   const S = window.PetStages;
+  const Ev = window.PetEvolution;
 
   const MAX_POOL = 32;                   // 软上限,避免无限增长
 
@@ -26,6 +27,7 @@
     return {
       slot: slot,
       species: species,
+      form: Ev.rootForm(species), // 当前进化形态(树根 = 蛋),随成长级联进化并持久化
       petName: id.petName,
       agent: id.agent,
       sid: id.sid,
@@ -74,6 +76,11 @@
     for (let i = 0; i < this.pool.length; i++) {
       const m = this.pool[i];
       m.accumSec += dtSec; // 会话存续 -> 持续消耗 token / 成长
+
+      // 进化:累计 token 达阈值则按珍稀度倒数加权选子形态前进(级联补进化)并持久化
+      const nextForm = Ev.advance(m.form, S.tokensFromSeconds(m.accumSec), m.species);
+      if (nextForm !== m.form) { m.form = nextForm; this.dirty = true; }
+
       if (now < m.nextSwitchAt) continue;
 
       if (m.status === 'completed') {
@@ -117,6 +124,7 @@
       return {
         slot: m.slot,
         species: m.species,
+        form: m.form,
         petName: m.petName,
         agent: m.agent,
         sid: m.sid,
@@ -147,14 +155,20 @@
     this.pool = data.pool.map((m, i) => {
       const status = (Demo.STATES.includes(m.status) ? m.status : 'running');
       const species = (Art.species.includes(m.species) ? m.species : Art.species[0]);
+      // 形态:优先沿用持久化的 form(需属于同物种树),否则按累计 token 重新推导
+      const accumSec = (typeof m.accumSec === 'number' && m.accumSec >= 0) ? m.accumSec : 0;
+      let form = m.form;
+      const valid = Ev.isValidForm(form) && Ev.get(form).species === species;
+      if (!valid) form = Ev.advance(Ev.rootForm(species), S.tokensFromSeconds(accumSec), species);
       return {
         slot: i,
         species: species,
+        form: form,
         petName: m.petName || 'Pet',
         agent: m.agent || 'Codex',
         sid: m.sid || '000000',
         bornAt: m.bornAt || now,
-        accumSec: (typeof m.accumSec === 'number' && m.accumSec >= 0) ? m.accumSec : 0,
+        accumSec: accumSec,
         status: status,
         userMsg: m.userMsg || '',
         agentMsg: m.agentMsg || '',
