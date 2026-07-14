@@ -37,15 +37,39 @@ $UD.onDidReceiveGlobalSettings((jsn) => {
 // 配置到按键
 $UD.onAdd((jsn) => {
   const context = jsn.context;
+  let isNew = false;
   if (!VIEWS[context]) {
     const view = new PetView(context);
     view.setLang($UD.language);
+    // 新拖入的按键:默认指向最小的未用槽位 + 随机一个背景
+    view.slot = firstUnusedSlot(context);
+    view.bg = randomBg();
     VIEWS[context] = view;
+    isNew = true;
   }
   const view = VIEWS[context];
-  if (jsn.param) view.applySettings(jsn.param);
-  $UD.getSettings(context); // 拉取该按键已保存的 slot
+  if (jsn.param) view.applySettings(jsn.param); // 已保存配置覆盖默认
+  if (isNew) save(view);                          // 持久化默认分配
+  $UD.getSettings(context); // 拉取该按键已保存的 slot/bg
 });
+
+// 最小的、当前未被其它按键占用的槽位
+function firstUnusedSlot(exceptContext) {
+  const used = {};
+  for (const c in VIEWS) {
+    if (c === exceptContext) continue;
+    used[VIEWS[c].slot] = true;
+  }
+  let s = 0;
+  while (used[s]) s++;
+  return s;
+}
+
+// 随机背景(排除“无”)
+function randomBg() {
+  const list = window.PetBackgrounds.themes.filter((t) => t !== 'none');
+  return list[Math.floor(Math.random() * list.length)] || 'none';
+}
 
 // 上位机回传该按键已保存参数(slot)
 $UD.onDidReceiveSettings((jsn) => {
@@ -75,7 +99,7 @@ function applyParam(jsn) {
 $UD.onSendToPlugin((jsn) => {
   const p = jsn && jsn.payload;
   if (p && p.type === 'getPool') {
-    $UD.sendToPropertyInspector({ type: 'pool', pool: Coord.summaries() }, jsn.context);
+    $UD.sendToPropertyInspector({ type: 'pool', pool: Coord.summaries(nowMs()) }, jsn.context);
   }
 });
 

@@ -29,10 +29,12 @@
       agent: id.agent,
       sid: id.sid,
       bornAt: now,
-      accumSec: 0,          // 运行时长(秒)—— 驱动成长
+      accumSec: 0,          // 累计运行时长(秒)—— 驱动成长
       status: 'running',
-      userMsg: turn.userMsg,
-      agentMsg: turn.agentMsg,
+      userMsg: turn.userMsg,   // 本轮我对 Agent 说的话(整回合不变)
+      agentMsg: turn.agentMsg, // Agent 最新反馈(回合内可更新)
+      turnStart: now,       // 本轮开始时间(我对 Agent 说话的时刻)
+      turnFrozenMs: null,   // 完成时冻结的本轮持续时长(ms);进行中为 null
       nextSwitchAt: now + Demo.logRandInterval(),
     };
   }
@@ -57,7 +59,7 @@
     this.dirty = true;
   };
 
-  // 主循环调用:推进时间(生成新宠物 + 每只宠物成长/状态切换)
+  // 主循环调用:推进时间(生成新宠物 + 每只宠物成长/回合状态推进)
   Coordinator.prototype.tick = function (now, dtSec) {
     if (now - this.lastSpawnAt >= SPAWN_EVERY_MS && this.pool.length < MAX_POOL) {
       this.lastSpawnAt = now;
@@ -66,11 +68,27 @@
     for (let i = 0; i < this.pool.length; i++) {
       const m = this.pool[i];
       m.accumSec += dtSec; // 会话存续 -> 持续消耗 token / 成长
-      if (now >= m.nextSwitchAt) {
-        m.status = Demo.pickState();
+      if (now < m.nextSwitchAt) continue;
+
+      if (m.status === 'completed') {
+        // 上一回合已结束 -> 开启新的一回合(我又对 Agent 说话)
         const t = Demo.pickTurn();
-        m.userMsg = t.userMsg;
+        m.status = 'running';
+        m.turnStart = now;
+        m.turnFrozenMs = null;
+        m.userMsg = t.userMsg;   // 新回合:换一句我说的话
         m.agentMsg = t.agentMsg;
+        m.nextSwitchAt = now + Demo.logRandInterval();
+      } else if (Demo.rand(2) === 0) {
+        // 本回合完成 -> 冻结本轮持续时长,给出最终回复(我说的话不变)
+        m.status = 'completed';
+        m.turnFrozenMs = Math.max(0, now - m.turnStart);
+        m.agentMsg = Demo.pickTurn().agentMsg;
+        m.nextSwitchAt = now + Demo.logRandInterval();
+      } else {
+        // 回合内在 运行/暂停 之间切换(计时继续,我说的话不变,仅更新反馈)
+        m.status = (m.status === 'running') ? 'waiting' : 'running';
+        m.agentMsg = Demo.pickTurn().agentMsg;
         m.nextSwitchAt = now + Demo.logRandInterval();
       }
     }
@@ -84,17 +102,24 @@
   };
 
   // 供 PI 列出可选槽位的精简摘要
-  Coordinator.prototype.summaries = function () {
-    return this.pool.map((m) => ({
-      slot: m.slot,
-      species: m.species,
-      petName: m.petName,
-      agent: m.agent,
-      sid: m.sid,
-      status: m.status,
-      accumSec: Math.round(m.accumSec),
-      tokens: Math.round(S.tokensFromSeconds(m.accumSec)),
-    }));
+  Coordinator.prototype.summaries = function (now) {
+    const t = (typeof now === 'number') ? now : 0;
+    return this.pool.map((m) => {
+      let turnMs = (m.status === 'completed' && typeof m.turnFrozenMs === 'number')
+        ? m.turnFrozenMs : (t - m.turnStart);
+      if (!(turnMs >= 0)) turnMs = 0;
+      return {
+        slot: m.slot,
+        species: m.species,
+        petName: m.petName,
+        agent: m.agent,
+        sid: m.sid,
+        status: m.status,
+        accumSec: Math.round(m.accumSec),
+        turnSec: Math.round(turnMs / 1000),
+        tokens: Math.round(S.tokensFromSeconds(m.accumSec)),
+      };
+    });
   };
 
   Coordinator.prototype.reset = function (now) {
@@ -113,20 +138,24 @@
 
   Coordinator.prototype.restore = function (data, now) {
     if (!data || !Array.isArray(data.pool) || data.pool.length === 0) return false;
-    this.pool = data.pool.map((m, i) => ({
-      slot: i,
-      species: (Art.species.includes(m.species) ? m.species : Art.species[0]),
-      petName: m.petName || 'Pet',
-      agent: m.agent || 'Codex',
-      sid: m.sid || '000000',
-      bornAt: m.bornAt || now,
-      accumSec: (typeof m.accumSec === 'number' && m.accumSec >= 0) ? m.accumSec : 0,
-      status: (Demo.STATES.includes(m.status) ? m.status : 'running'),
-      userMsg: m.userMsg || '',
-      agentMsg: m.agentMsg || '',
-      // 恢复后的下次切换时间落在过去也无妨(会立即切一次)
-      nextSwitchAt: (typeof m.nextSwitchAt === 'number') ? m.nextSwitchAt : now,
-    }));
+    this.pool = data.pool.map((m, i) => {
+      const status = (Demo.STATES.includes(m.status) ? m.status : 'running');
+      return {
+        slot: i,
+        species: (Art.species.includes(m.species) ? m.species : Art.species[0]),
+        petName: m.petName || 'Pet',
+        agent: m.agent || 'Codex',
+        sid: m.sid || '000000',
+        bornAt: m.bornAt || now,
+        accumSec: (typeof m.accumSec === 'number' && m.accumSec >= 0) ? m.accumSec : 0,
+        status: status,
+        userMsg: m.userMsg || '',
+        agentMsg: m.agentMsg || '',
+        turnStart: (typeof m.turnStart === 'number') ? m.turnStart : now,
+        turnFrozenMs: (status === 'completed' && typeof m.turnFrozenMs === 'number') ? m.turnFrozenMs : null,
+        nextSwitchAt: (typeof m.nextSwitchAt === 'number') ? m.nextSwitchAt : now,
+      };
+    });
     this.lastSpawnAt = (typeof data.lastSpawnAt === 'number') ? data.lastSpawnAt : now;
     return true;
   };

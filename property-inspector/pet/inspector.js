@@ -15,8 +15,6 @@ $UD.onConnected(() => {
   document.querySelector('.uspi-wrapper').classList.remove('hidden');
   document.querySelector('#slotLabel').textContent = (lang === 'zh') ? '槽位' : 'Slot';
   document.querySelector('#bgLabel').textContent = (lang === 'zh') ? '背景' : 'Background';
-  document.querySelector('#slotHint').textContent = (lang === 'zh')
-    ? '可指向尚未出现的槽位' : 'may point to a future slot';
 
   // 槽位数字输入(1 起,内部 0 起)
   const slotEl = document.querySelector('#slot');
@@ -107,16 +105,14 @@ function renderList() {
   list.innerHTML = '';
   POOL.forEach((m) => {
     const div = document.createElement('div');
-    div.className = 'slot-opt';
+    div.className = 'slot-chip';
     div.dataset.slot = m.slot;
-    const spName = (PetArt.speciesName[m.species] || {})[lang] || m.species;
+    const dur = (typeof m.turnSec === 'number') ? m.turnSec : (m.accumSec || 0);
     div.innerHTML =
-      `<div class="slot-dot" style="background:${STATUS_COLOR[m.status] || '#888'}"></div>` +
-      `<div class="slot-idx">#${m.slot + 1}</div>` +
-      `<div class="slot-main">` +
-        `<div class="slot-title">${m.agent} · ${spName}</div>` +
-        `<div class="slot-sub">${m.sid} · ${fmtClock(m.accumSec)}</div>` +
-      `</div>`;
+      `<span class="dot" style="background:${STATUS_COLOR[m.status] || '#888'}"></span>` +
+      `<span class="idx">#${m.slot + 1}</span>` +
+      `<span>${m.agent}</span>` +
+      `<span class="sub">${fmtClock(dur)}</span>`;
     div.addEventListener('click', () => selectSlot(m.slot));
     list.appendChild(div);
   });
@@ -124,7 +120,7 @@ function renderList() {
 }
 
 function markActive() {
-  document.querySelectorAll('.slot-opt').forEach((el) => {
+  document.querySelectorAll('.slot-chip').forEach((el) => {
     el.classList.toggle('active', Number(el.dataset.slot) === Number(ACTION_SETTING.slot));
   });
   document.querySelectorAll('.bg-opt').forEach((el) => {

@@ -22,6 +22,13 @@
     g.addColorStop(0, c0); g.addColorStop(1, c1);
     ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
   }
+  function cloud(ctx, x, y, r) {
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.arc(x + r, y + r * 0.2, r * 0.8, 0, Math.PI * 2);
+    ctx.arc(x - r, y + r * 0.2, r * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   const THEMES = {
     none: { back: null, front: null },
@@ -169,9 +176,163 @@
         ctx.restore();
       },
     },
+
+    // 草原:蓝天 + 起伏山丘 + 飘云 + 太阳;前景摇曳青草
+    meadow: {
+      back: function (ctx, cfg) {
+        const { phase, w, h } = cfg;
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#8fd0ff'); g.addColorStop(0.58, '#cdeeff');
+        g.addColorStop(0.58, '#a6e07a'); g.addColorStop(1, '#79c052');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        ctx.save(); ctx.globalAlpha = 0.95; ctx.fillStyle = '#fff2b0';
+        ctx.beginPath(); ctx.arc(w - 28, 26, 13, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        ctx.fillStyle = '#8ccf63';
+        ctx.beginPath(); ctx.moveTo(0, h * 0.66);
+        ctx.quadraticCurveTo(w * 0.3, h * 0.54, w * 0.6, h * 0.66);
+        ctx.quadraticCurveTo(w * 0.85, h * 0.76, w, h * 0.62);
+        ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        for (let i = 0; i < 3; i++) {
+          const cx = ((i * 58 + phase * 6) % (w + 60)) - 30;
+          cloud(ctx, cx, 20 + i * 9, 9 + i * 2);
+        }
+      },
+      front: function (ctx, cfg) {
+        const { phase, w, h } = cfg;
+        ctx.save();
+        ctx.strokeStyle = '#4f9e39'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+        for (let i = 0; i <= 26; i++) {
+          const x = i * (w / 26); const sway = Math.sin(phase * 2 + i * 0.6) * 3;
+          ctx.beginPath(); ctx.moveTo(x, h);
+          ctx.quadraticCurveTo(x + sway, h - 9, x + sway * 1.6, h - 15); ctx.stroke();
+        }
+        ctx.restore();
+      },
+    },
+
+    // 篱笆:蓝天 + 绿地 + 白色尖桩篱笆
+    fence: {
+      back: function (ctx, cfg) {
+        const { w, h } = cfg;
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#a9dbff'); g.addColorStop(0.55, '#dff2c4');
+        g.addColorStop(0.55, '#8ccf5c'); g.addColorStop(1, '#6bb544');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        const topY = 74, botY = 108;
+        ctx.fillStyle = '#f4f1e7'; ctx.strokeStyle = '#c9c2ad'; ctx.lineWidth = 1;
+        ctx.fillRect(0, topY + 8, w, 5); ctx.fillRect(0, botY - 12, w, 5);
+        for (let x = 2; x < w; x += 18) {
+          ctx.beginPath();
+          ctx.moveTo(x, botY); ctx.lineTo(x, topY + 5); ctx.lineTo(x + 6, topY);
+          ctx.lineTo(x + 12, topY + 5); ctx.lineTo(x + 12, botY); ctx.closePath();
+          ctx.fill(); ctx.stroke();
+        }
+      },
+      front: null,
+    },
+
+    // 房子:暖色墙面 + 采光窗 + 木地板
+    house: {
+      back: function (ctx, cfg) {
+        const { w, h } = cfg;
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#f0d3a0'); g.addColorStop(0.72, '#e6bd78');
+        g.addColorStop(0.72, '#b3783f'); g.addColorStop(1, '#9c6533');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#bfe6ff'; ctx.fillRect(14, 20, 42, 34);
+        ctx.strokeStyle = '#7a5a34'; ctx.lineWidth = 3; ctx.strokeRect(14, 20, 42, 34);
+        ctx.beginPath();
+        ctx.moveTo(35, 20); ctx.lineTo(35, 54);
+        ctx.moveTo(14, 37); ctx.lineTo(56, 37); ctx.stroke();
+      },
+      front: null,
+    },
+
+    // 狗窝:昏暗暖调 + 带屋顶和拱形门洞的小窝(宠物坐在门口)
+    kennel: {
+      back: function (ctx, cfg) {
+        const { w, h } = cfg;
+        vgrad(ctx, w, h, '#3a2c22', '#241a14');
+        const bx = 28, bw = w - 56, by = 70, bh = 64;
+        ctx.fillStyle = '#c98a4e'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = '#8b4f2a';
+        ctx.beginPath(); ctx.moveTo(bx - 8, by); ctx.lineTo(w / 2, by - 30);
+        ctx.lineTo(bx + bw + 8, by); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#1c130d';
+        const dw = bw * 0.52, dx = w / 2 - dw / 2, dy = by + bh, dtop = by + 16;
+        ctx.beginPath();
+        ctx.moveTo(dx, dy); ctx.lineTo(dx, dtop + dw / 2);
+        ctx.quadraticCurveTo(w / 2, dtop - 8, dx + dw, dtop + dw / 2);
+        ctx.lineTo(dx + dw, dy); ctx.closePath(); ctx.fill();
+      },
+      front: null,
+    },
+
+    // 花园:粉彩天空 + 绿地 + 灌木;前景飘落花粉 + 一排小花
+    garden: {
+      back: function (ctx, cfg) {
+        const { w, h } = cfg;
+        const g = ctx.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, '#ffd9ec'); g.addColorStop(0.55, '#fff0d0');
+        g.addColorStop(0.55, '#9fd873'); g.addColorStop(1, '#7cc255');
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#6fb84a';
+        [[20, 112, 17], [w - 24, 118, 20], [w / 2, 126, 15]].forEach((b) => {
+          ctx.beginPath(); ctx.arc(b[0], b[1], b[2], 0, Math.PI * 2); ctx.fill();
+        });
+      },
+      front: function (ctx, cfg) {
+        const { phase, w, h } = cfg;
+        ctx.save();
+        ctx.fillStyle = 'rgba(255,250,200,0.9)';
+        for (let i = 0; i < 14; i++) {
+          const x = (rnd(i) * w + Math.sin(phase * 0.6 + i) * 10 + w) % w;
+          const y = (rnd(i + 3) * h * 0.8 + phase * 8) % h;
+          ctx.globalAlpha = 0.4 + 0.6 * Math.abs(Math.sin(phase + i));
+          ctx.beginPath(); ctx.arc(x, y, 1.4, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        const cols = ['#ff7ba0', '#ffd166', '#c08bff'];
+        for (let i = 0; i < 7; i++) {
+          const x = 12 + i * (w - 24) / 6, y = h - 7;
+          ctx.fillStyle = cols[i % 3];
+          for (let k = 0; k < 5; k++) {
+            const a = k / 5 * Math.PI * 2;
+            ctx.beginPath(); ctx.arc(x + Math.cos(a) * 3, y + Math.sin(a) * 3, 2, 0, Math.PI * 2); ctx.fill();
+          }
+          ctx.fillStyle = '#fff2b0';
+          ctx.beginPath(); ctx.arc(x, y, 1.6, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      },
+    },
+
+    // 壁炉:昏暗暖室 + 火光辉晕 + 炉膛 + 跳动火焰
+    fireplace: {
+      back: function (ctx, cfg) {
+        const { phase, w, h } = cfg;
+        vgrad(ctx, w, h, '#3a2620', '#1a1210');
+        const gl = 0.5 + Math.sin(phase * 6) * 0.14;
+        const rg = ctx.createRadialGradient(w / 2, h * 0.82, 8, w / 2, h * 0.82, 92);
+        rg.addColorStop(0, `rgba(255,150,60,${0.38 * gl})`);
+        rg.addColorStop(1, 'rgba(255,150,60,0)');
+        ctx.fillStyle = rg; ctx.fillRect(0, 0, w, h);
+        ctx.fillStyle = '#5a3a2a'; ctx.fillRect(18, h - 26, w - 36, 26);
+        for (let i = 0; i < 5; i++) {
+          const fx = w / 2 + (i - 2) * 10;
+          const fh = 12 + Math.abs(Math.sin(phase * 8 + i)) * 12;
+          ctx.fillStyle = i % 2 ? '#ff9a3c' : '#ffd23c';
+          ctx.beginPath(); ctx.moveTo(fx - 5, h - 12);
+          ctx.quadraticCurveTo(fx, h - 12 - fh, fx + 5, h - 12); ctx.closePath(); ctx.fill();
+        }
+      },
+      front: null,
+    },
   };
 
-  const ORDER = ['none', 'stars', 'aurora', 'rain', 'snow', 'sakura', 'grid', 'frame'];
+  const ORDER = ['none', 'stars', 'aurora', 'rain', 'snow', 'sakura', 'grid', 'frame',
+    'meadow', 'fence', 'house', 'kennel', 'garden', 'fireplace'];
   const NAMES = {
     none:   { en: 'None',   zh: '无' },
     stars:  { en: 'Stars',  zh: '星空' },
@@ -181,6 +342,12 @@
     sakura: { en: 'Sakura', zh: '樱花' },
     grid:   { en: 'Grid',   zh: '网格' },
     frame:  { en: 'Frame',  zh: '相框' },
+    meadow: { en: 'Meadow', zh: '草原' },
+    fence:  { en: 'Fence',  zh: '篱笆' },
+    house:  { en: 'House',  zh: '房子' },
+    kennel: { en: 'Kennel', zh: '狗窝' },
+    garden: { en: 'Garden', zh: '花园' },
+    fireplace: { en: 'Fireplace', zh: '壁炉' },
   };
 
   function drawBack(ctx, key, cfg) {

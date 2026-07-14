@@ -127,6 +127,64 @@
     ctx.restore();
   }
 
+  // 本轮对话持续时长(秒):完成时取冻结值,否则 = now - turnStart
+  function turnElapsedSec(meta, now) {
+    if (meta.status === 'completed' && typeof meta.turnFrozenMs === 'number') {
+      return Math.max(0, meta.turnFrozenMs / 1000);
+    }
+    const start = (typeof meta.turnStart === 'number') ? meta.turnStart : now;
+    return Math.max(0, (now - start) / 1000);
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Agent 工具图标:品牌色圆角方块 + 白色简笔标记
+  function drawAgentIcon(ctx, cx, cy, size, agent) {
+    const col = AGENT_COLORS[agent] || '#8b93a1';
+    const r = size / 2;
+    ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = col;
+    roundRect(ctx, cx - r, cy - r, size, size, size * 0.28); ctx.fill();
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = Math.max(1.3, size * 0.11); ctx.lineCap = 'round';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (agent === 'Claude') {
+      ctx.save(); ctx.translate(cx, cy);
+      for (let i = 0; i < 8; i++) {
+        ctx.rotate(Math.PI / 4);
+        ctx.beginPath(); ctx.moveTo(0, -size * 0.10); ctx.lineTo(0, -r * 0.72); ctx.stroke();
+      }
+      ctx.restore();
+    } else if (agent === 'Codex') {
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 3 * i - Math.PI / 6;
+        const px = cx + Math.cos(a) * r * 0.62, py = cy + Math.sin(a) * r * 0.62;
+        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.closePath(); ctx.stroke();
+    } else if (agent === 'Qoder') {
+      ctx.font = `bold ${size * 0.72}px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('Q', cx, cy + size * 0.03);
+    } else if (agent === 'Pi') {
+      ctx.font = `bold ${size * 0.72}px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('π', cx, cy + size * 0.03);
+    } else {
+      ctx.font = `bold ${size * 0.62}px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText((agent || '?').charAt(0), cx, cy + size * 0.03);
+    }
+    ctx.restore();
+  }
+
   // 前导图标 + 两行内容
   function drawIconLines(ctx, iconFn, text, textColor, line1Y, line2Y) {
     const iconR = 6;
@@ -236,22 +294,23 @@
     ctx.fillStyle = scrim;
     ctx.fillRect(0, 0, SIZE, SCRIM_H);
 
-    // ---- 头部:agent 名 + session id + 运行时间 ----
+    // ---- 头部:Agent 工具图标 + session id(靠左) + 本轮时长(居中) ----
     const headY = 13;
+    const iconSize = 14;
+    drawAgentIcon(ctx, MARGIN_L + iconSize / 2, headY - 4, iconSize, meta.agent);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
     ctx.textBaseline = 'alphabetic';
-    ctx.font = `600 11px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillStyle = '#aeb6c2'; ctx.textAlign = 'right';
-    ctx.fillText(fmtClock(meta.accumSec), MARGIN_R, headY);
+    // session id 靠左(紧跟图标)
     ctx.textAlign = 'left';
-    ctx.font = `bold 10px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillStyle = AGENT_COLORS[meta.agent] || '#c8cfda';
-    ctx.fillText(meta.agent, MARGIN_L, headY);
-    const aw = ctx.measureText(meta.agent).width;
     ctx.font = `9px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillStyle = '#c2c9d4';
-    ctx.fillText(' ' + meta.sid, MARGIN_L + aw, headY);
+    ctx.fillText(meta.sid, MARGIN_L + iconSize + 5, headY);
+    // 本轮对话时长 居中
+    ctx.textAlign = 'center';
+    ctx.font = `600 11px 'Source Han Sans SC', system-ui, sans-serif`;
+    ctx.fillStyle = '#aeb6c2';
+    ctx.fillText(fmtClock(turnElapsedSec(meta, now)), CX, headY);
     ctx.restore();
 
     // ---- 我这轮说的话(用户头像图标)----
