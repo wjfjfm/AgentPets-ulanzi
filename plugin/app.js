@@ -65,16 +65,8 @@ function firstUnusedSlot(exceptContext) {
   return s;
 }
 
-// 背景随机:洗牌牌堆(类似音乐随机播放)——先洗一副再顺序发牌,发完再洗;
-// 发牌时优先跳过「同屏其它按键已用」的背景,尽量不重复。
-let bgBag = [];
-function refillBgBag() {
-  bgBag = window.PetBackgrounds.themes.filter((t) => t !== 'none');
-  for (let i = bgBag.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    const tmp = bgBag[i]; bgBag[i] = bgBag[j]; bgBag[j] = tmp;
-  }
-}
+// 背景随机:在「同屏其它按键未使用」的集合里随机选取,保证同屏尽量不重复;
+// 若该集合为空(按键数超过主题数,无法避免重复),再从全部主题里完整随机。
 function bgsInUse(exceptContext) {
   const used = {};
   for (const c in VIEWS) {
@@ -87,16 +79,9 @@ function randomBg(exceptContext) {
   const all = window.PetBackgrounds.themes.filter((t) => t !== 'none');
   if (all.length === 0) return 'none';
   const used = bgsInUse(exceptContext);
-  // 两轮:当前牌堆里找未用的;找不到就重洗一副再找(保证覆盖全部主题)
-  for (let pass = 0; pass < 2; pass++) {
-    for (let i = 0; i < bgBag.length; i++) {
-      if (!used[bgBag[i]]) return bgBag.splice(i, 1)[0];
-    }
-    refillBgBag();
-  }
-  // 屏上背景数已超过主题数,无法避免重复 -> 顺序发下一张
-  if (bgBag.length === 0) refillBgBag();
-  return bgBag.pop();
+  const free = all.filter((t) => !used[t]);
+  const pool = free.length ? free : all; // 无不重复集合则完整随机
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // 上位机回传该按键已保存参数(slot)
