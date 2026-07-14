@@ -195,10 +195,7 @@
     ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4;
     ctx.fillStyle = '#7c8698';
     ctx.font = `600 44px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillText('#' + (this.slot + 1), CX, 78);
-    ctx.fillStyle = '#aab2c0';
-    ctx.font = `12px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillText(this.lang === 'zh' ? '等待宠物…' : 'No pet yet', CX, 104);
+    ctx.fillText('#' + (this.slot + 1), CX, 92);
     ctx.restore();
     const hp = this.holdProgress(now);
     if (hp > 0) this.drawHoldRing(ctx, hp);

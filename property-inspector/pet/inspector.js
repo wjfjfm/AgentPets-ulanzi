@@ -158,9 +158,7 @@ function startPreview() {
     if (!m) {
       ctx.save(); ctx.textAlign = 'center';
       ctx.fillStyle = '#7c8698'; ctx.font = `600 40px 'Source Han Sans SC', sans-serif`;
-      ctx.fillText('#' + (Number(ACTION_SETTING.slot) + 1), 72, 78);
-      ctx.fillStyle = '#aab2c0'; ctx.font = `12px 'Source Han Sans SC', sans-serif`;
-      ctx.fillText(lang === 'zh' ? '等待宠物…' : 'No pet yet', 72, 104);
+      ctx.fillText('#' + (Number(ACTION_SETTING.slot) + 1), 72, 90);
       ctx.restore();
     }
   }, 120);
