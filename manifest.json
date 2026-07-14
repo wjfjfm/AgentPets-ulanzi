@@ -2,7 +2,7 @@
   "Author": "Ulanzi",
   "Name": "Agent Pets",
   "Overview": "Desktop pets that hatch and evolve as your agent's token usage grows.",
-  "Description": "Pick one of three pets (Slime, Kitcat, Draco), give it a name, and watch it grow through 15 stages driven by agent token usage (in demo mode: run time x a fixed rate, ~0.2M tokens/hour). The pet shows its status with an icon (working / sleeping / done), plus live run time and name. Tap to browse the next slot; long-press 2s to delete the current pet.",
+  "Description": "Pick one of three pets (Slime, Kitcat, Draco), give it a name, and watch it grow through 15 stages driven by agent token usage (in demo mode: run time x a fixed rate, ~0.2M tokens/hour). The pet shows its status with an icon (working / sleeping / done), plus live run time and name. Long-press 2s to delete the current pet.",
   "Icon": "assets/icons/icon.png",
   "Version": "1.0.0",
   "Category": "Agent Pets",

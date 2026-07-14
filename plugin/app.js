@@ -5,7 +5,7 @@
  *   宠物的 meta(agent/session/对话/运行时长/token/类型/状态)。
  * - 每个按键持有一个 PetView,只保存一个 slot 索引;渲染时从 Coordinator 取该
  *   slot 的 meta 快照画出图标。多个按键可指向同一 slot,显示同一只宠物。
- * - 手势(仅 KeyDown/KeyUp):短按切槽浏览;长按 0.5s 起显示倒计时,满 2s 删除当前 Pet。
+ * - 手势(仅 KeyDown/KeyUp):短按暂不处理(预留跳转 Agent);长按 0.5s 起显示倒计时,满 2s 删除当前 Pet。
  * - 宠物池写入「全局设置」,供 PI(配置面板)读取并列出可选槽位。
  */
 const Coord = window.PetCoordinator;
@@ -117,9 +117,9 @@ $UD.onSendToPlugin((jsn) => {
 });
 
 // ---- 手势(只用 KeyDown / KeyUp,不使用 onRun)----
-// 短按(< 0.5s):切换到下一个槽位浏览宠物池。
+// 短按(< 0.5s):暂不处理,预留未来「跳转到该 Agent」语义。
 // 长按 0.5s 起显示倒计时框;满 2s 删除当前 Pet(在主循环中触发,单只、不影响其它)。
-// 处于倒计时中松手(0.5s~2s):视为取消,不切槽、不删除。
+// 处于倒计时中松手(0.5s~2s):视为取消,不删除。
 $UD.onKeyDown((jsn) => {
   const view = VIEWS[jsn.context];
   if (view) view.beginHold(nowMs());
@@ -128,17 +128,10 @@ $UD.onKeyDown((jsn) => {
 $UD.onKeyUp((jsn) => {
   const view = VIEWS[jsn.context];
   if (!view) return;
-  const held = view.heldMs(nowMs());
   view.endHold();
-  if (held < view.HOLD_SHOW_MS) {
-    // 短按:切换到下一个槽位(在池范围内循环)
-    const n = Coord.slotCount();
-    if (n > 0) view.slot = (view.slot + 1) % n;
-    save(view);
-  }
-  // 倒计时中松手(HOLD_SHOW_MS ~ HOLD_DELETE_MS):取消,什么都不做
-  // 满 HOLD_DELETE_MS:删除已在主循环触发
-  pushIcon(view);
+  // 短按:预留未来「跳转到该 Agent」,当前不做任何处理。
+  // 倒计时中松手 / 满 2s 删除均无需在此处理(删除已在主循环触发)。
+  pushIcon(view); // 重绘以清除可能残留的倒计时环
 });
 
 // 移除配置
