@@ -137,8 +137,15 @@
     return sec * 1000;
   }
 
+  // 生成新宠物的间隔(毫秒):随已占用槽位数指数增长后取随机
+  //   count 只时 -> random(0, 10 * 2^count) 秒(0→0-10,1→0-20,2→0-40…)
+  function spawnRandInterval(count) {
+    const maxS = 10 * Math.pow(2, count);
+    return Math.random() * maxS * 1000;
+  }
+
   window.PetDemo = {
     PET_NAMES, AGENTS, USER_SAYS, AGENT_SAYS, STATES,
-    genIdentity, pickTurn, pickState, logRandInterval, pick, rand,
+    genIdentity, pickTurn, pickState, logRandInterval, spawnRandInterval, pick, rand,
   };
 })();

@@ -5,8 +5,9 @@
  * 每只宠物的全部 meta 都在这里:agent(claude/codex/…) · session id · 当前对话 ·
  * 运行时长 · token 消耗 · 宠物类型 · 当前状态。
  *
- * Demo 阶段:每 10 分钟自动生成一只新宠物追加到池尾;每只宠物按对数随机节奏
- * 切换状态并更新对话,运行时长持续累加(驱动成长与 token 估算)。
+ * Demo 阶段:按「随占用槽位数指数增长后随机」的节奏自动生成新宠物追加到池尾
+ * (0 只时随机 0-10s,1 只 0-20s,2 只 0-40s…越拥挤越慢);每只宠物按对数随机
+ * 节奏切换状态并更新对话,运行时长持续累加(驱动成长与 token 估算)。
  *
  * 按键侧不再各自持有宠物,只保存一个 slot 索引;渲染时从这里 get(slot) 取 meta。
  * 池结构会写入「全局设置」,以便 PI(配置面板)读取并列出可选槽位。
@@ -16,7 +17,6 @@
   const Art = window.PetArt;
   const S = window.PetStages;
 
-  const SPAWN_EVERY_MS = 10 * 60 * 1000; // Demo:每 10 分钟生成一只
   const MAX_POOL = 32;                   // 软上限,避免无限增长
 
   function newMeta(slot, now) {
@@ -41,15 +41,20 @@
 
   function Coordinator() {
     this.pool = [];
-    this.lastSpawnAt = 0;
+    this.nextSpawnAt = 0;
     this.dirty = false; // 结构或数据变化,提示上层需要持久化到全局设置
   }
+
+  // 依据当前占用槽位数,安排下一次生成时间(指数增长后随机)
+  Coordinator.prototype.scheduleNextSpawn = function (now) {
+    this.nextSpawnAt = now + Demo.spawnRandInterval(this.pool.length);
+  };
 
   Coordinator.prototype.init = function (now) {
     if (this.pool.length === 0) {
       this.pool.push(newMeta(0, now));
     }
-    if (!this.lastSpawnAt) this.lastSpawnAt = now;
+    if (!this.nextSpawnAt) this.scheduleNextSpawn(now);
     this.dirty = true;
   };
 
@@ -61,9 +66,9 @@
 
   // 主循环调用:推进时间(生成新宠物 + 每只宠物成长/回合状态推进)
   Coordinator.prototype.tick = function (now, dtSec) {
-    if (now - this.lastSpawnAt >= SPAWN_EVERY_MS && this.pool.length < MAX_POOL) {
-      this.lastSpawnAt = now;
+    if (now >= this.nextSpawnAt && this.pool.length < MAX_POOL) {
       this.spawn(now);
+      this.scheduleNextSpawn(now);
     }
     for (let i = 0; i < this.pool.length; i++) {
       const m = this.pool[i];
@@ -124,7 +129,7 @@
 
   Coordinator.prototype.reset = function (now) {
     this.pool = [];
-    this.lastSpawnAt = 0;
+    this.nextSpawnAt = 0;
     this.init(now);
   };
 
@@ -132,7 +137,7 @@
   Coordinator.prototype.serialize = function () {
     return {
       pool: this.pool,
-      lastSpawnAt: this.lastSpawnAt,
+      nextSpawnAt: this.nextSpawnAt,
     };
   };
 
@@ -156,11 +161,10 @@
         nextSwitchAt: (typeof m.nextSwitchAt === 'number') ? m.nextSwitchAt : now,
       };
     });
-    this.lastSpawnAt = (typeof data.lastSpawnAt === 'number') ? data.lastSpawnAt : now;
+    this.nextSpawnAt = (typeof data.nextSpawnAt === 'number') ? data.nextSpawnAt : now;
     return true;
   };
 
   window.PetCoordinator = new Coordinator();
-  window.PetCoordinator.SPAWN_EVERY_MS = SPAWN_EVERY_MS;
   window.PetCoordinator.MAX_POOL = MAX_POOL;
 })();
