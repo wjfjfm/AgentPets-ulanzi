@@ -29,8 +29,9 @@
   const HOLD_RESET_MS = 3000; // 长按 3 秒重置 demo 宠物池
   const SCRIM_H = 84;     // 顶部信息带遮罩高度
   const MARGIN_L = 12, MARGIN_R = 132; // 文字左右安全边界
-  const AREA_TOP = 78;   // 宠物可用区域上边缘(信息带之下)
-  const TOP_UNIT = 1.35; // 宠物顶端(冠/角)相对中心约 1.35 个 unit
+  // 地面基线:宠物的脚(地面阴影)固定落在此 Y,避免小体型(蛋)悬空;
+  // 体型变大时向上生长(头部被顶部遮罩压暗,不遮挡文字)。
+  const GROUND_Y = 132;
 
   const STATUS = {
     running:   { behavior: 'work',  color: '#37c057' },
@@ -38,8 +39,10 @@
     completed: { behavior: 'alert', color: '#4a9df0' },
   };
 
+  // 品牌色(取自各家官方主色):
+  //   Codex→OpenAI 绿 · Claude→Anthropic 陶土橙 · Qoder→官方紫 · Pi→珊瑚
   const AGENT_COLORS = {
-    Codex: '#19c37d', Claude: '#d9a441', Qoder: '#7b6cf6', Pi: '#ec6a5e',
+    Codex: '#10a37f', Claude: '#d97757', Qoder: '#8b5cf6', Pi: '#ec6a5e',
   };
 
   function PetView(context) {
@@ -146,7 +149,7 @@
     ctx.closePath();
   }
 
-  // Agent 工具图标:品牌色圆角方块 + 白色简笔标记
+  // Agent 工具图标:品牌色圆角方块 + 白色简笔标记(参考各家真实 logo,按显示尺寸简化)
   function drawAgentIcon(ctx, cx, cy, size, agent) {
     const col = AGENT_COLORS[agent] || '#8b93a1';
     const r = size / 2;
@@ -158,21 +161,33 @@
     ctx.lineWidth = Math.max(1.3, size * 0.11); ctx.lineCap = 'round';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     if (agent === 'Claude') {
+      // Anthropic「星芒」:一圈由中心向外渐尖的填充射线
       ctx.save(); ctx.translate(cx, cy);
-      for (let i = 0; i < 8; i++) {
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath(); ctx.moveTo(0, -size * 0.10); ctx.lineTo(0, -r * 0.72); ctx.stroke();
+      const rays = 12, inner = r * 0.14, outer = r * 0.84, wBase = size * 0.06;
+      for (let i = 0; i < rays; i++) {
+        ctx.rotate(Math.PI * 2 / rays);
+        ctx.beginPath();
+        ctx.moveTo(-wBase, -inner); ctx.lineTo(wBase, -inner); ctx.lineTo(0, -outer);
+        ctx.closePath(); ctx.fill();
       }
       ctx.restore();
     } else if (agent === 'Codex') {
-      ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = Math.PI / 3 * i - Math.PI / 6;
-        const px = cx + Math.cos(a) * r * 0.62, py = cy + Math.sin(a) * r * 0.62;
-        i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      // OpenAI「花结」:六片花瓣绕中心成环,中心留孔呈镂空结
+      ctx.save(); ctx.translate(cx, cy);
+      const petals = 6;
+      for (let i = 0; i < petals; i++) {
+        const a = Math.PI * 2 / petals * i;
+        ctx.save();
+        ctx.translate(Math.cos(a) * r * 0.34, Math.sin(a) * r * 0.34);
+        ctx.rotate(a);
+        ctx.beginPath(); ctx.ellipse(0, 0, r * 0.5, r * 0.24, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
       }
-      ctx.closePath(); ctx.stroke();
+      ctx.fillStyle = col; // 回填中心成镂空
+      ctx.beginPath(); ctx.arc(0, 0, r * 0.2, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     } else if (agent === 'Qoder') {
+      // Qoder:白色「Q」字标
       ctx.font = `bold ${size * 0.72}px 'Source Han Sans SC', system-ui, sans-serif`;
       ctx.fillText('Q', cx, cy + size * 0.03);
     } else if (agent === 'Pi') {
@@ -271,9 +286,9 @@
     drawBackground(ctx);
     Bg.drawBack(ctx, this.bg, cfg);
 
-    // 宠物本体:顶端贴可用区域上边缘,尽量完整显示;过大则向下溢出被裁
+    // 宠物本体:脚固定在地面基线(GROUND_Y),小体型不再悬空;过大则向上生长
     const unit = BASE_UNIT * g.scale;
-    const cy = AREA_TOP + TOP_UNIT * unit;
+    const cy = GROUND_Y - Art.footOffset(meta.species, g, unit);
     Art.drawPet(ctx, {
       species: meta.species,
       growth: g,

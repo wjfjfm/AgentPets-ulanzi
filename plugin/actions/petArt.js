@@ -380,8 +380,18 @@
     drawBehaviorFx(ctx, cx, cy, unit, behavior, phase);
   }
 
+  // 从中心 cy 到「着地点(地面阴影)」的垂直距离,供上层把脚固定在地面基线。
+  //   蛋:阴影落在 cy + r*1.05(r = unit*0.9)
+  //   生物:地面阴影落在 cy + bh*0.95(bh = unit*shape.h)
+  function footOffset(species, growth, unit) {
+    const shape = SHAPE[species] || SHAPE.slime;
+    if (growth.stage <= 1) return unit * 0.9 * 1.05;
+    return unit * shape.h * 0.95;
+  }
+
   window.PetArt = {
     drawPet,
+    footOffset,
     palettes: PALETTES,
     species: ['slime', 'cat', 'dragon'],
     speciesName: {
