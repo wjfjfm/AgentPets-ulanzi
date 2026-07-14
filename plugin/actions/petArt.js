@@ -389,11 +389,32 @@
     return unit * shape.h * 0.95;
   }
 
+  // ---- 稀有度 ----
+  // 每个物种一个「珍稀度」数值:越大越稀有。分配新宠物时按「珍稀度的倒数」
+  // 加权随机 —— 珍稀度 N 的出现概率是珍稀度 1 的 1/N。
+  const SPECIES = ['slime', 'cat', 'dragon'];
+  const RARITY = { slime: 9, cat: 10, dragon: 11 };
+  function rarityOf(key) { return RARITY[key] || 1; }
+
+  // 倒数加权随机,返回一个物种 key(稀有度越高越少见)
+  function pickSpecies() {
+    const weights = SPECIES.map((k) => 1 / rarityOf(k));
+    const total = weights.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < SPECIES.length; i++) {
+      if ((r -= weights[i]) < 0) return SPECIES[i];
+    }
+    return SPECIES[SPECIES.length - 1];
+  }
+
   window.PetArt = {
     drawPet,
     footOffset,
     palettes: PALETTES,
-    species: ['slime', 'cat', 'dragon'],
+    species: SPECIES,
+    rarity: RARITY,
+    rarityOf,
+    pickSpecies,
     speciesName: {
       slime: { en: 'Slime', zh: '史莱姆' },
       cat: { en: 'Kitcat', zh: '喵仔' },

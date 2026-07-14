@@ -22,9 +22,11 @@
   function newMeta(slot, now) {
     const id = Demo.genIdentity();
     const turn = Demo.pickTurn();
+    const species = Art.pickSpecies(); // 按稀有度倒数加权随机分配物种
     return {
       slot: slot,
-      species: Demo.pick(Art.species),
+      species: species,
+      rarity: Art.rarityOf(species), // 出生即固定该宠物的珍稀度
       petName: id.petName,
       agent: id.agent,
       sid: id.sid,
@@ -116,6 +118,7 @@
       return {
         slot: m.slot,
         species: m.species,
+        rarity: (typeof m.rarity === 'number') ? m.rarity : Art.rarityOf(m.species),
         petName: m.petName,
         agent: m.agent,
         sid: m.sid,
@@ -145,9 +148,11 @@
     if (!data || !Array.isArray(data.pool) || data.pool.length === 0) return false;
     this.pool = data.pool.map((m, i) => {
       const status = (Demo.STATES.includes(m.status) ? m.status : 'running');
+      const species = (Art.species.includes(m.species) ? m.species : Art.species[0]);
       return {
         slot: i,
-        species: (Art.species.includes(m.species) ? m.species : Art.species[0]),
+        species: species,
+        rarity: (typeof m.rarity === 'number') ? m.rarity : Art.rarityOf(species),
         petName: m.petName || 'Pet',
         agent: m.agent || 'Codex',
         sid: m.sid || '000000',
