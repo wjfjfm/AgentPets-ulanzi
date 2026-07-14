@@ -1,0 +1,42 @@
+{
+  "Author": "Ulanzi",
+  "Name": "Agent Pets",
+  "Overview": "Desktop pets that hatch and evolve as your agent's token usage grows.",
+  "Description": "Pick one of three pets (Slime, Kitcat, Draco), give it a name, and watch it grow through 15 stages driven by agent token usage (in demo mode: run time x a fixed rate, ~0.2M tokens/hour). The pet shows its status with an icon (working / sleeping / done), plus live run time and name. Tap to pause/resume; long-press 3s to reset.",
+  "Icon": "assets/icons/icon.png",
+  "Version": "1.0.0",
+  "Category": "Agent Pets",
+  "CategoryIcon": "assets/icons/categoryIcon.png",
+  "Banner": [
+    "assets/banners/banner-1.png"
+  ],
+  "UUID": "com.ulanzi.ulanzistudio.tokenpet",
+  "Type": "JavaScript",
+  "CodePath": "plugin/app.html",
+  "Software": {
+    "MinVersion": "3.0.0"
+  },
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.11" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Actions": [
+    {
+      "Name": "Agent Pet",
+      "Icon": "assets/icons/actionIcon.png",
+      "PropertyInspectorPath": "property-inspector/pet/inspector.html",
+      "state": 0,
+      "States": [
+        {
+          "Name": "Pet",
+          "Image": "assets/icons/icon.png"
+        }
+      ],
+      "Tooltip": "Raise a pet that grows with your agent's token usage",
+      "UUID": "com.ulanzi.ulanzistudio.tokenpet.pet",
+      "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
+      "Controllers": ["Keypad"]
+    }
+  ]
+}

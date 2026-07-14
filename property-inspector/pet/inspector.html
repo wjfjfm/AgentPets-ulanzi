@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover" />
+  <title>Token Pet</title>
+  <link rel="stylesheet" href="../../libs/css/uspi.css">
+  <style>
+    .pet-preview { display: flex; justify-content: center; padding: 10px 0; }
+    .pet-preview canvas { width: 96px; height: 96px; border-radius: 12px; background: #1e1f22; }
+    .species-row { display: flex; gap: 8px; }
+    .species-opt {
+      flex: 1; text-align: center; padding: 8px 4px; border-radius: 8px;
+      border: 2px solid transparent; background: #2a2c31; cursor: pointer; color: #ddd;
+    }
+    .species-opt.active { border-color: #4a9df0; color: #fff; }
+  </style>
+</head>
+<body>
+  <div class="uspi-wrapper hidden">
+
+    <div class="pet-preview"><canvas id="preview" width="144" height="144"></canvas></div>
+
+    <form id="property-inspector">
+      <div class="uspi-item">
+        <div class="uspi-item-label" data-localize>Pet</div>
+        <div class="uspi-item-value">
+          <div class="species-row" id="speciesRow"></div>
+        </div>
+      </div>
+      <input type="hidden" name="species" id="species" value="slime">
+    </form>
+
+  </div>
+
+  <script src="../../libs/js/constants.js"></script>
+  <script src="../../libs/js/eventEmitter.js"></script>
+  <script src="../../libs/js/timers.js"></script>
+  <script src="../../libs/js/utils.js"></script>
+  <script src="../../libs/js/ulanziApi.js"></script>
+
+  <script src="../../plugin/actions/stages.js"></script>
+  <script src="../../plugin/actions/petArt.js"></script>
+
+  <script src="./inspector.js"></script>
+</body>
+</html>

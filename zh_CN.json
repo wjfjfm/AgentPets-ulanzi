@@ -1,0 +1,15 @@
+{
+  "Name": "Agent Pets",
+  "Description": "随 Agent 的 Token 用量成长的桌面电子宠物：孵化、进化、陪你工作。",
+  "Actions": {
+    "Agent Pet": "Agent 宠物"
+  },
+  "Localization": {
+    "Pet": "宠物",
+    "Name": "名字",
+    "Give it a name": "给它起个名字",
+    "Slime": "史莱姆",
+    "Kitcat": "喵仔",
+    "Draco": "小龙"
+  }
+}

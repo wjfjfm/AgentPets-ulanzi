@@ -1,0 +1,15 @@
+{
+  "Name": "Agent Pets",
+  "Description": "Desktop pets that hatch and evolve as your agent's token usage grows.",
+  "Actions": {
+    "Agent Pet": "Agent Pet"
+  },
+  "Localization": {
+    "Pet": "Pet",
+    "Name": "Name",
+    "Give it a name": "Give it a name",
+    "Slime": "Slime",
+    "Kitcat": "Kitcat",
+    "Draco": "Draco"
+  }
+}
