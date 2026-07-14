@@ -26,7 +26,6 @@
     return {
       slot: slot,
       species: species,
-      rarity: Art.rarityOf(species), // 出生即固定该宠物的珍稀度
       petName: id.petName,
       agent: id.agent,
       sid: id.sid,
@@ -118,7 +117,6 @@
       return {
         slot: m.slot,
         species: m.species,
-        rarity: (typeof m.rarity === 'number') ? m.rarity : Art.rarityOf(m.species),
         petName: m.petName,
         agent: m.agent,
         sid: m.sid,
@@ -152,7 +150,6 @@
       return {
         slot: i,
         species: species,
-        rarity: (typeof m.rarity === 'number') ? m.rarity : Art.rarityOf(species),
         petName: m.petName || 'Pet',
         agent: m.agent || 'Codex',
         sid: m.sid || '000000',
