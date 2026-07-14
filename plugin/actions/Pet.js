@@ -21,6 +21,7 @@
 (function () {
   const S = window.PetStages;
   const Art = window.PetArt;
+  const Bg = window.PetBackgrounds;
 
   const SIZE = 144;
   const CX = 72;
@@ -44,6 +45,7 @@
   function PetView(context) {
     this.context = context;
     this.slot = 0;         // 该按键显示池中的第几只
+    this.bg = 'none';      // 背景主题(每按键独立)
     this.lang = 'zh';
     this.holdStart = 0;
 
@@ -56,10 +58,11 @@
   PetView.prototype.applySettings = function (s) {
     if (!s) return;
     if (typeof s.slot === 'number' && s.slot >= 0) this.slot = Math.floor(s.slot);
+    if (typeof s.bg === 'string' && Bg.has(s.bg)) this.bg = s.bg;
   };
 
   PetView.prototype.serialize = function () {
-    return { slot: this.slot };
+    return { slot: this.slot, bg: this.bg };
   };
 
   PetView.prototype.setLang = function (ln) {
@@ -180,16 +183,20 @@
     ctx.fillRect(0, 0, SIZE, SIZE);
   }
 
-  // 空槽位占位:该按键选中的 slot 尚无宠物(还没生成)
-  PetView.prototype.renderEmpty = function (now) {
+  // 空槽位占位:该按键选中的 slot 尚无宠物(还没生成);背景照常显示
+  PetView.prototype.renderEmpty = function (now, phase) {
     const ctx = this.ctx;
+    const cfg = { phase: phase, w: SIZE, h: SIZE };
     drawBackground(ctx);
+    Bg.drawBack(ctx, this.bg, cfg);
+    Bg.drawFront(ctx, this.bg, cfg);
     ctx.save();
     ctx.textAlign = 'center';
-    ctx.fillStyle = '#5a6270';
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 4;
+    ctx.fillStyle = '#7c8698';
     ctx.font = `600 44px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillText('#' + (this.slot + 1), CX, 78);
-    ctx.fillStyle = '#8b93a1';
+    ctx.fillStyle = '#aab2c0';
     ctx.font = `12px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillText(this.lang === 'zh' ? '等待宠物…' : 'No pet yet', CX, 104);
     ctx.restore();
@@ -199,13 +206,15 @@
   };
 
   PetView.prototype.render = function (meta, now, phase) {
-    if (!meta) return this.renderEmpty(now);
+    if (!meta) return this.renderEmpty(now, phase);
     const ctx = this.ctx;
     const g = S.growthFromSeconds(meta.accumSec);
     const st = STATUS[meta.status] ? meta.status : 'running';
     const smeta = STATUS[st];
+    const cfg = { phase: phase, w: SIZE, h: SIZE };
 
     drawBackground(ctx);
+    Bg.drawBack(ctx, this.bg, cfg);
 
     // 宠物本体:顶端贴可用区域上边缘,尽量完整显示;过大则向下溢出被裁
     const unit = BASE_UNIT * g.scale;
@@ -218,6 +227,9 @@
       cx: CX, cy: cy,
       unit: unit,
     });
+
+    // 前景层(盖在宠物之上,UI 文字之下)
+    Bg.drawFront(ctx, this.bg, cfg);
 
     // 顶部信息带遮罩
     const scrim = ctx.createLinearGradient(0, 0, 0, SCRIM_H);

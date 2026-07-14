@@ -9,9 +9,15 @@
   <style>
     .pet-preview { display: flex; justify-content: center; padding: 10px 0; }
     .pet-preview canvas { width: 96px; height: 96px; border-radius: 12px; background: #1e1f22; }
-    .slot-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+    .slot-input-row { display: flex; align-items: center; gap: 8px; }
+    .slot-input-row input[type=number] {
+      width: 72px; padding: 7px 8px; border-radius: 8px; border: 1px solid #3a3d44;
+      background: #23252b; color: #fff; font-size: 14px;
+    }
+    .slot-input-hint { font-size: 10px; color: #8b93a1; }
+    .slot-list { display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; margin-top: 6px; }
     .slot-opt {
-      display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 8px;
+      display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 8px;
       border: 2px solid transparent; background: #2a2c31; cursor: pointer; color: #ddd;
     }
     .slot-opt.active { border-color: #4a9df0; color: #fff; }
@@ -20,7 +26,12 @@
     .slot-title { font-size: 12px; }
     .slot-sub { font-size: 10px; opacity: .6; }
     .slot-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-    .empty-hint { color: #8b93a1; font-size: 12px; text-align: center; padding: 12px 0; }
+    .bg-row { display: flex; flex-wrap: wrap; gap: 6px; }
+    .bg-opt {
+      padding: 6px 10px; border-radius: 8px; border: 2px solid transparent;
+      background: #2a2c31; cursor: pointer; color: #ddd; font-size: 12px;
+    }
+    .bg-opt.active { border-color: #4a9df0; color: #fff; }
   </style>
 </head>
 <body>
@@ -30,13 +41,23 @@
 
     <form id="property-inspector">
       <div class="uspi-item">
-        <div class="uspi-item-label">Slot</div>
+        <div class="uspi-item-label" id="slotLabel">Slot</div>
         <div class="uspi-item-value">
+          <div class="slot-input-row">
+            <input type="number" id="slot" name="slot" min="1" step="1" value="1">
+            <span class="slot-input-hint" id="slotHint"></span>
+          </div>
           <div class="slot-list" id="slotList"></div>
-          <div class="empty-hint" id="emptyHint">Loading pets…</div>
         </div>
       </div>
-      <input type="hidden" name="slot" id="slot" value="0">
+
+      <div class="uspi-item">
+        <div class="uspi-item-label" id="bgLabel">Background</div>
+        <div class="uspi-item-value">
+          <div class="bg-row" id="bgRow"></div>
+        </div>
+      </div>
+      <input type="hidden" name="bg" id="bg" value="none">
     </form>
 
   </div>
@@ -49,6 +70,7 @@
 
   <script src="../../plugin/actions/stages.js"></script>
   <script src="../../plugin/actions/petArt.js"></script>
+  <script src="../../plugin/actions/backgrounds.js"></script>
 
   <script src="./inspector.js"></script>
 </body>

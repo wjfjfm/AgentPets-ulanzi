@@ -1,4 +1,4 @@
-let ACTION_SETTING = { slot: 0 };
+let ACTION_SETTING = { slot: 0, bg: 'none' };
 let form = '';
 let previewT = 0;
 let POOL = [];   // 当前宠物池摘要
@@ -13,11 +13,33 @@ $UD.onConnected(() => {
   lang = ($UD.language && $UD.language.indexOf('zh') === 0) ? 'zh' : 'en';
 
   document.querySelector('.uspi-wrapper').classList.remove('hidden');
-  document.querySelector('.uspi-item-label').textContent = (lang === 'zh') ? '槽位' : 'Slot';
+  document.querySelector('#slotLabel').textContent = (lang === 'zh') ? '槽位' : 'Slot';
+  document.querySelector('#bgLabel').textContent = (lang === 'zh') ? '背景' : 'Background';
+  document.querySelector('#slotHint').textContent = (lang === 'zh')
+    ? '可指向尚未出现的槽位' : 'may point to a future slot';
+
+  // 槽位数字输入(1 起,内部 0 起)
+  const slotEl = document.querySelector('#slot');
+  slotEl.addEventListener('input', () => {
+    const v = Math.max(1, Math.floor(Number(slotEl.value) || 1));
+    ACTION_SETTING.slot = v - 1;
+    markActive();
+    send();
+  });
+
+  // 背景选项
+  const bgRow = document.querySelector('#bgRow');
+  PetBackgrounds.themes.forEach((key) => {
+    const div = document.createElement('div');
+    div.className = 'bg-opt';
+    div.dataset.bg = key;
+    div.textContent = PetBackgrounds.names[key][lang];
+    div.addEventListener('click', () => selectBg(key));
+    bgRow.appendChild(div);
+  });
 
   requestPool();
-  // 池会随时间增长,定期刷新一次列表
-  setInterval(requestPool, 5000);
+  setInterval(requestPool, 5000); // 池随时间增长,定期刷新列表
   startPreview();
 });
 
@@ -48,14 +70,24 @@ function requestPool() {
 }
 
 function restore(p) {
-  ACTION_SETTING = Object.assign({ slot: 0 }, p);
-  if (form) document.querySelector('#slot').value = ACTION_SETTING.slot;
+  ACTION_SETTING = Object.assign({ slot: 0, bg: 'none' }, p);
+  if (form) {
+    document.querySelector('#slot').value = (ACTION_SETTING.slot || 0) + 1;
+    document.querySelector('#bg').value = ACTION_SETTING.bg || 'none';
+  }
   markActive();
 }
 
 function selectSlot(slot) {
   ACTION_SETTING.slot = slot;
-  document.querySelector('#slot').value = slot;
+  document.querySelector('#slot').value = slot + 1;
+  markActive();
+  send();
+}
+
+function selectBg(key) {
+  ACTION_SETTING.bg = key;
+  document.querySelector('#bg').value = key;
   markActive();
   send();
 }
@@ -72,10 +104,7 @@ function fmtClock(sec) {
 
 function renderList() {
   const list = document.querySelector('#slotList');
-  const hint = document.querySelector('#emptyHint');
   list.innerHTML = '';
-  if (!POOL.length) { hint.style.display = ''; hint.textContent = (lang === 'zh') ? '暂无宠物…' : 'No pets yet…'; return; }
-  hint.style.display = 'none';
   POOL.forEach((m) => {
     const div = document.createElement('div');
     div.className = 'slot-opt';
@@ -98,33 +127,41 @@ function markActive() {
   document.querySelectorAll('.slot-opt').forEach((el) => {
     el.classList.toggle('active', Number(el.dataset.slot) === Number(ACTION_SETTING.slot));
   });
+  document.querySelectorAll('.bg-opt').forEach((el) => {
+    el.classList.toggle('active', el.dataset.bg === ACTION_SETTING.bg);
+  });
 }
 
-// 预览:画出所选槽位宠物当前形态(工作状态动画)
+// 预览:背景 + 所选槽位宠物(或空槽占位) + 前景
 function startPreview() {
   const cv = document.querySelector('#preview');
   const ctx = cv.getContext('2d');
   setInterval(() => {
     previewT += 0.12;
-    ctx.clearRect(0, 0, 144, 144);
+    const cfg = { phase: previewT, w: 144, h: 144 };
     const bg = ctx.createLinearGradient(0, 0, 0, 144);
     bg.addColorStop(0, '#24262b'); bg.addColorStop(1, '#15161a');
     ctx.fillStyle = bg; ctx.fillRect(0, 0, 144, 144);
+    PetBackgrounds.drawBack(ctx, ACTION_SETTING.bg, cfg);
 
     const m = POOL.find((x) => Number(x.slot) === Number(ACTION_SETTING.slot));
-    if (!m) {
-      ctx.fillStyle = '#5a6270'; ctx.textAlign = 'center';
-      ctx.font = `600 40px 'Source Han Sans SC', sans-serif`;
-      ctx.fillText('#' + (Number(ACTION_SETTING.slot) + 1), 72, 78);
-      ctx.fillStyle = '#8b93a1'; ctx.font = `12px 'Source Han Sans SC', sans-serif`;
-      ctx.fillText(lang === 'zh' ? '等待宠物…' : 'No pet yet', 72, 104);
-      return;
+    if (m) {
+      const g = PetStages.growthFromSeconds(m.accumSec);
+      const behavior = m.status === 'waiting' ? 'idle' : (m.status === 'completed' ? 'alert' : 'work');
+      PetArt.drawPet(ctx, {
+        species: m.species, growth: g, behavior: behavior,
+        phase: previewT, cx: 72, cy: 78, unit: 26,
+      });
     }
-    const g = PetStages.growthFromSeconds(m.accumSec);
-    const behavior = m.status === 'waiting' ? 'idle' : (m.status === 'completed' ? 'alert' : 'work');
-    PetArt.drawPet(ctx, {
-      species: m.species, growth: g, behavior: behavior,
-      phase: previewT, cx: 72, cy: 78, unit: 26,
-    });
+    PetBackgrounds.drawFront(ctx, ACTION_SETTING.bg, cfg);
+
+    if (!m) {
+      ctx.save(); ctx.textAlign = 'center';
+      ctx.fillStyle = '#7c8698'; ctx.font = `600 40px 'Source Han Sans SC', sans-serif`;
+      ctx.fillText('#' + (Number(ACTION_SETTING.slot) + 1), 72, 78);
+      ctx.fillStyle = '#aab2c0'; ctx.font = `12px 'Source Han Sans SC', sans-serif`;
+      ctx.fillText(lang === 'zh' ? '等待宠物…' : 'No pet yet', 72, 104);
+      ctx.restore();
+    }
   }, 120);
 }
