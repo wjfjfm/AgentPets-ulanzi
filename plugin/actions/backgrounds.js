@@ -12,6 +12,10 @@
  *   (y ≳ PET_TOP),避免压住文字导致难以辨识;天空渐变、粒子等低对比氛围
  *   元素可铺满整块(顶部另有遮罩压暗)。
  *
+ * 【地平线规范】带地平线的背景(草原/篱笆/花园…),地平线固定在 Pet 区
+ *   自顶向下 2/3 处(见 horizonY),明显低于文字区边界(PET_TOP),避免地
+ *   平线与文字区边界重合;地面物件可自地平线向上延伸。
+ *
  * 用法:
  *   PetBackgrounds.drawBack(ctx, key, {phase, w, h})
  *   PetBackgrounds.drawFront(ctx, key, {phase, w, h})
@@ -19,6 +23,8 @@
 (function () {
   // 主要物件的顶边下限:低于此线才不会压到顶部文字
   const PET_TOP = 84;
+  // 地平线 Y:Pet 区(PET_TOP~h)自顶向下 2/3 处;远离文字区边界(PET_TOP)
+  function horizonY(h) { return PET_TOP + (h - PET_TOP) * 2 / 3; }
   // 稳定伪随机(按索引,保证每帧位置不跳变)
   function rnd(i) {
     const x = Math.sin(i * 12.9898) * 43758.5453;
@@ -188,20 +194,21 @@
     meadow: {
       back: function (ctx, cfg) {
         const { phase, w, h } = cfg;
+        const hz = horizonY(h), stop = hz / h;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#8fd0ff'); g.addColorStop(0.62, '#cdeeff');
-        g.addColorStop(0.62, '#a6e07a'); g.addColorStop(1, '#79c052');
+        g.addColorStop(0, '#8fd0ff'); g.addColorStop(stop, '#cdeeff');
+        g.addColorStop(stop, '#a6e07a'); g.addColorStop(1, '#79c052');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        // 太阳:低垂近地平线,落在 Pet 区(不压顶部文字)
+        // 太阳:地平线之上的天空
         ctx.save(); ctx.globalAlpha = 0.95; ctx.fillStyle = '#fff2b0';
-        ctx.beginPath(); ctx.arc(w - 26, PET_TOP + 12, 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
-        // 远山(位于地平线以下)
+        ctx.beginPath(); ctx.arc(w - 26, hz - 24, 10, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+        // 远山:自地平线隆起
         ctx.fillStyle = '#8ccf63';
-        ctx.beginPath(); ctx.moveTo(0, h * 0.72);
-        ctx.quadraticCurveTo(w * 0.3, h * 0.62, w * 0.6, h * 0.72);
-        ctx.quadraticCurveTo(w * 0.85, h * 0.8, w, h * 0.68);
+        ctx.beginPath(); ctx.moveTo(0, hz);
+        ctx.quadraticCurveTo(w * 0.3, hz - 12, w * 0.6, hz);
+        ctx.quadraticCurveTo(w * 0.85, hz + 6, w, hz - 8);
         ctx.lineTo(w, h); ctx.lineTo(0, h); ctx.closePath(); ctx.fill();
-        // 飘云:压低到地平线附近,避开文字区
+        // 飘云:地平线上方天空
         ctx.fillStyle = 'rgba(255,255,255,0.9)';
         for (let i = 0; i < 3; i++) {
           const cx = ((i * 58 + phase * 6) % (w + 60)) - 30;
@@ -225,11 +232,13 @@
     fence: {
       back: function (ctx, cfg) {
         const { w, h } = cfg;
+        const hz = horizonY(h), stop = hz / h;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#a9dbff'); g.addColorStop(0.6, '#dff2c4');
-        g.addColorStop(0.6, '#8ccf5c'); g.addColorStop(1, '#6bb544');
+        g.addColorStop(0, '#a9dbff'); g.addColorStop(stop, '#dff2c4');
+        g.addColorStop(stop, '#8ccf5c'); g.addColorStop(1, '#6bb544');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-        const topY = PET_TOP + 8, botY = 128;
+        // 篱笆:立在地平线上,向上延伸(尖顶远离文字区边界)
+        const botY = hz + 6, topY = hz - 24;
         ctx.fillStyle = '#f4f1e7'; ctx.strokeStyle = '#c9c2ad'; ctx.lineWidth = 1;
         ctx.fillRect(0, topY + 8, w, 5); ctx.fillRect(0, botY - 12, w, 5);
         for (let x = 2; x < w; x += 18) {
@@ -284,12 +293,13 @@
     garden: {
       back: function (ctx, cfg) {
         const { w, h } = cfg;
+        const hz = horizonY(h), stop = hz / h;
         const g = ctx.createLinearGradient(0, 0, 0, h);
-        g.addColorStop(0, '#ffd9ec'); g.addColorStop(0.55, '#fff0d0');
-        g.addColorStop(0.55, '#9fd873'); g.addColorStop(1, '#7cc255');
+        g.addColorStop(0, '#ffd9ec'); g.addColorStop(stop, '#fff0d0');
+        g.addColorStop(stop, '#9fd873'); g.addColorStop(1, '#7cc255');
         ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
         ctx.fillStyle = '#6fb84a';
-        [[20, 112, 17], [w - 24, 118, 20], [w / 2, 126, 15]].forEach((b) => {
+        [[20, hz - 4, 16], [w - 24, hz + 2, 18], [w / 2, hz + 8, 14]].forEach((b) => {
           ctx.beginPath(); ctx.arc(b[0], b[1], b[2], 0, Math.PI * 2); ctx.fill();
         });
       },
