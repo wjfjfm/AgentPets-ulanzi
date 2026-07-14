@@ -11,7 +11,7 @@
 const Coord = window.PetCoordinator;
 const VIEWS = {};
 
-const FPS = 6;                 // 每秒推送帧数
+const FPS = 2;                 // 统一 2fps 推送,降低编码/传输开销与设备刷新排队
 const SAVE_EVERY_MS = 8000;    // 全局池持久化间隔
 const CLICK_MAX_MS = 400;      // 短按阈值
 
@@ -166,9 +166,14 @@ function startLoop() {
     // 池结构变化(生成新宠物/重置) -> 持久化到全局设置,让 PI 能看到
     if (Coord.dirty) { Coord.dirty = false; saveGlobal(); }
 
+    // 批量渲染并一次性发送所有按键图标,减少 websocket 次数与设备刷新排队
+    const batch = [];
     for (let i = 0; i < contexts.length; i++) {
-      pushIcon(VIEWS[contexts[i]], phase);
+      const view = VIEWS[contexts[i]];
+      const data = view.render(Coord.get(view.slot), now, phase);
+      batch.push({ context: view.context, data: data });
     }
+    if (batch.length) $UD.setBaseDataIcons(batch);
 
     // 周期持久化(成长进度)
     if (now - lastSave >= SAVE_EVERY_MS) {
