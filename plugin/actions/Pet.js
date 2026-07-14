@@ -294,23 +294,31 @@
     ctx.fillStyle = scrim;
     ctx.fillRect(0, 0, SIZE, SCRIM_H);
 
-    // ---- 头部:Agent 工具图标 + session id(靠左) + 本轮时长(居中) ----
+    // ---- 头部:Agent 工具图标 + session id(靠左固定宽) + 本轮时长(右侧余量居中) ----
     const headY = 13;
     const iconSize = 14;
+    const sidX = MARGIN_L + iconSize + 5;   // session id 起始 x
+    const sidW = 44;                        // session id 固定占位宽度
+    const timeLeft = sidX + sidW;           // 时间可用区域左界
     drawAgentIcon(ctx, MARGIN_L + iconSize / 2, headY - 4, iconSize, meta.agent);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
     ctx.textBaseline = 'alphabetic';
-    // session id 靠左(紧跟图标)
+    // session id 靠左(紧跟图标,固定宽度,超出裁剪)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(sidX, 0, sidW, SCRIM_H);
+    ctx.clip();
     ctx.textAlign = 'left';
     ctx.font = `9px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillStyle = '#c2c9d4';
-    ctx.fillText(meta.sid, MARGIN_L + iconSize + 5, headY);
-    // 本轮对话时长 居中
+    ctx.fillText(meta.sid, sidX, headY);
+    ctx.restore();
+    // 本轮对话时长 在 session id 右侧的剩余空间居中
     ctx.textAlign = 'center';
     ctx.font = `600 11px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillStyle = '#aeb6c2';
-    ctx.fillText(fmtClock(turnElapsedSec(meta, now)), CX, headY);
+    ctx.fillText(fmtClock(turnElapsedSec(meta, now)), (timeLeft + MARGIN_R) / 2, headY);
     ctx.restore();
 
     // ---- 我这轮说的话(用户头像图标)----
