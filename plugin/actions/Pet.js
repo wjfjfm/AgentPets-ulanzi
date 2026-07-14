@@ -19,11 +19,14 @@
 
   const SIZE = 144;
   const CX = 72;
-  const CY = 128;         // 宠物大幅下沉,把顶部黄金带完全让给文字
   const BASE_UNIT = 22;
   const HOLD_RESET_MS = 3000; // 长按 3 秒重置
   const SCRIM_H = 84;     // 顶部信息带遮罩高度
   const MARGIN_L = 12, MARGIN_R = 132; // 文字左右安全边界
+  // 宠物默认贴“可用区域”上边缘(信息带下方),优先完整显示(含脚);
+  // 长得非常大时自然向下延伸、被下边缘裁掉。
+  const AREA_TOP = 78;   // 可用区域上边缘(信息带之下)
+  const TOP_UNIT = 1.35; // 宠物顶端(冠/角)相对中心约 1.35 个 unit
 
   // 状态视觉映射(demo: running/waiting/completed)
   const STATUS = {
@@ -183,55 +186,25 @@
     return lines;
   }
 
-  // 圆角矩形
-  function roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  // 彩色标签,返回宽度。baselineY 为其所在文本行的基线
-  function drawChip(ctx, x, baselineY, label, bg, fg) {
-    const font = `bold 9px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.font = font;
-    const tw = ctx.measureText(label).width;
-    const padX = 4, h = 12, w = tw + padX * 2;
-    const top = baselineY - 9;
+  // 用户头像小图标(圆底 + 人形剪影),作为“我说的话”的前导标记
+  function drawUserBadge(ctx, x, y, r) {
     ctx.save();
     ctx.shadowBlur = 0;
-    ctx.fillStyle = bg;
-    roundRect(ctx, x, top, w, h, 3); ctx.fill();
-    ctx.fillStyle = fg;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(label, x + padX, baselineY - 0.5);
+    ctx.fillStyle = '#5a6675';
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#eef2f7';
+    // 头
+    ctx.beginPath(); ctx.arc(x, y - r * 0.22, r * 0.30, 0, Math.PI * 2); ctx.fill();
+    // 肩(上半圆)
+    ctx.beginPath(); ctx.arc(x, y + r * 0.72, r * 0.5, Math.PI, Math.PI * 2); ctx.fill();
     ctx.restore();
-    return w;
   }
 
-  // 一段“说话人 + 两行内容”
-  Pet.prototype.drawSpeaker = function (ctx, chipLabel, chipBg, chipFg, text, textColor, line1Y, line2Y) {
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
-    const chipW = drawChip(ctx, MARGIN_L, line1Y, chipLabel, chipBg, chipFg);
-    const l1x = MARGIN_L + chipW + 5;
-    const font = `500 11px 'Source Han Sans SC', system-ui, sans-serif`;
-    const lines = wrap2(ctx, text, MARGIN_R - l1x, MARGIN_R - MARGIN_L, font);
-    ctx.font = font; ctx.fillStyle = textColor;
-    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    ctx.fillText(lines[0] || '', l1x, line1Y);
-    if (lines[1]) ctx.fillText(lines[1], MARGIN_L, line2Y);
-    ctx.restore();
-  };
-
-  // agent 反馈段:用运行状态图标作前导标记 + 两行内容
-  Pet.prototype.drawReply = function (ctx, st, meta, phase, text, textColor, line1Y, line2Y) {
+  // 前导图标 + 两行内容(图标由 iconFn(ctx,x,y,r) 绘制)
+  function drawIconLines(ctx, iconFn, text, textColor, line1Y, line2Y) {
     const iconR = 6;
     const iconX = MARGIN_L + iconR;
-    this.drawStatusBadge(ctx, iconX, line1Y - 4, iconR, st, meta, phase);
+    iconFn(ctx, iconX, line1Y - 4, iconR);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
     const l1x = iconX + iconR + 5;
@@ -242,6 +215,19 @@
     ctx.fillText(lines[0] || '', l1x, line1Y);
     if (lines[1]) ctx.fillText(lines[1], MARGIN_L, line2Y);
     ctx.restore();
+  }
+
+  // 我这轮说的话:用户头像图标 + 两行内容
+  Pet.prototype.drawAsk = function (ctx, text, textColor, line1Y, line2Y) {
+    drawIconLines(ctx, drawUserBadge, text, textColor, line1Y, line2Y);
+  };
+
+  // agent 这轮反馈:运行状态图标 + 两行内容
+  Pet.prototype.drawReply = function (ctx, st, meta, phase, text, textColor, line1Y, line2Y) {
+    const self = this;
+    drawIconLines(ctx, function (c, x, y, r) {
+      self.drawStatusBadge(c, x, y, r, st, meta, phase);
+    }, text, textColor, line1Y, line2Y);
   };
 
   Pet.prototype.render = function (now, phase) {
@@ -257,14 +243,16 @@
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // 宠物本体(下沉,显示不全没关系)
+    // 宠物本体:顶端贴可用区域上边缘,尽量完整显示;过大则向下溢出被裁
+    const unit = BASE_UNIT * g.scale;
+    const cy = AREA_TOP + TOP_UNIT * unit;
     Art.drawPet(ctx, {
       species: this.species,
       growth: g,
       behavior: meta.behavior,
       phase: phase,
-      cx: CX, cy: CY,
-      unit: BASE_UNIT * g.scale,
+      cx: CX, cy: cy,
+      unit: unit,
     });
 
     // 顶部信息带遮罩
@@ -290,15 +278,14 @@
     ctx.fillStyle = AGENT_COLORS[this.agent] || '#c8cfda';
     ctx.fillText(this.agent, MARGIN_L, headY);
     const aw = ctx.measureText(this.agent).width;
-    // session id(更小,灰)
+    // session id(更小,浅灰,保证可读)
     ctx.font = `9px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillStyle = '#8b93a1';
+    ctx.fillStyle = '#c2c9d4';
     ctx.fillText(' ' + this.sid, MARGIN_L + aw, headY);
     ctx.restore();
 
-    // ---- 我这轮说的话 ----
-    this.drawSpeaker(ctx, 'YOU', '#4a5568', '#eef2f7',
-      this.userMsg, '#e8edf4', 30, 42);
+    // ---- 我这轮说的话(用户头像图标)----
+    this.drawAsk(ctx, this.userMsg, '#e8edf4', 30, 42);
 
     // ---- agent 这轮最新反馈(用运行状态图标作为前导标记)----
     this.drawReply(ctx, st, meta, phase, this.agentMsg, '#c6cdd9', 58, 70);
