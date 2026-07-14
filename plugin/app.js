@@ -166,14 +166,9 @@ function startLoop() {
     // 池结构变化(生成新宠物/重置) -> 持久化到全局设置,让 PI 能看到
     if (Coord.dirty) { Coord.dirty = false; saveGlobal(); }
 
-    // 批量渲染并一次性发送所有按键图标,减少 websocket 次数与设备刷新排队
-    const batch = [];
     for (let i = 0; i < contexts.length; i++) {
-      const view = VIEWS[contexts[i]];
-      const data = view.render(Coord.get(view.slot), now, phase);
-      batch.push({ context: view.context, data: data });
+      pushIcon(VIEWS[contexts[i]], phase);
     }
-    if (batch.length) $UD.setBaseDataIcons(batch);
 
     // 周期持久化(成长进度)
     if (now - lastSave >= SAVE_EVERY_MS) {

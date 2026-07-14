@@ -512,27 +512,6 @@ class UlanziStreamDeck {
   }
 
   /**
-   * 批量设置图标-使⽤⾃定义图标，一次发送多个按键，减少 websocket 次数
-   * @param {Array} items 必传 | [{ context, data, text }]，context 为唯一id，data 为 base64 icon
-   */
-  setBaseDataIcons(items) {
-    if (!Array.isArray(items) || items.length === 0) return;
-    const statelist = items.map((it) => {
-      const { uuid, key, actionid } = this.decodeContext(it.context);
-      return {
-        uuid,
-        key,
-        actionid,
-        type: 1,
-        data: it.data,
-        textData: it.text || "",
-        showtext: it.text ? true : false,
-      };
-    });
-    this.send(Events.STATE, { param: { statelist } });
-  }
-
-  /**
    * 设置图标-使⽤本地图片文件
    * @param {string} context 必传 |唯一id,每个message里面common库会自动拼接给出
    * @param {string} path  必传 | 本地图片路径，⽀持打开插件根⽬录下的url链接（以/ ./ 起始的链接）
