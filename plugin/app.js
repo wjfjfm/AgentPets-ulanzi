@@ -5,7 +5,7 @@
  *   宠物的 meta(agent/session/对话/运行时长/token/类型/状态)。
  * - 每个按键持有一个 PetView,只保存一个 slot 索引;渲染时从 Coordinator 取该
  *   slot 的 meta 快照画出图标。多个按键可指向同一 slot,显示同一只宠物。
- * - 手势:短按 = 切换到下一个槽位(浏览池中宠物);长按 3 秒 = 重置 demo 宠物池。
+ * - 手势(仅 KeyDown/KeyUp):短按切槽浏览;长按 0.5s 起显示倒计时,满 2s 删除当前 Pet。
  * - 宠物池写入「全局设置」,供 PI(配置面板)读取并列出可选槽位。
  */
 const Coord = window.PetCoordinator;
@@ -116,7 +116,10 @@ $UD.onSendToPlugin((jsn) => {
   }
 });
 
-// ---- 手势:短按切槽 / 长按重置池 ----
+// ---- 手势(只用 KeyDown / KeyUp,不使用 onRun)----
+// 短按(< 0.5s):切换到下一个槽位浏览宠物池。
+// 长按 0.5s 起显示倒计时框;满 2s 删除当前 Pet(在主循环中触发,单只、不影响其它)。
+// 处于倒计时中松手(0.5s~2s):视为取消,不切槽、不删除。
 $UD.onKeyDown((jsn) => {
   const view = VIEWS[jsn.context];
   if (view) view.beginHold(nowMs());
@@ -125,16 +128,16 @@ $UD.onKeyDown((jsn) => {
 $UD.onKeyUp((jsn) => {
   const view = VIEWS[jsn.context];
   if (!view) return;
-  const held = nowMs() - view.holdStart;
+  const held = view.heldMs(nowMs());
   view.endHold();
-  if (held >= view.HOLD_RESET_MS) {
-    // 已在循环中触发重置
-  } else {
+  if (held < view.HOLD_SHOW_MS) {
     // 短按:切换到下一个槽位(在池范围内循环)
     const n = Coord.slotCount();
     if (n > 0) view.slot = (view.slot + 1) % n;
     save(view);
   }
+  // 倒计时中松手(HOLD_SHOW_MS ~ HOLD_DELETE_MS):取消,什么都不做
+  // 满 HOLD_DELETE_MS:删除已在主循环触发
   pushIcon(view);
 });
 
@@ -156,19 +159,16 @@ function startLoop() {
     lastFrame = now;
     const phase = now / 1000;
 
-    // 长按满 3 秒 -> 重置整个 demo 宠物池
-    let resetTriggered = false;
+    // 长按满 2 秒 -> 删除该按键当前槽位的单只 Pet(仅置空该槽,不影响其它)
     const contexts = Object.keys(VIEWS);
     for (let i = 0; i < contexts.length; i++) {
       const v = VIEWS[contexts[i]];
-      if (v.holdStart && v.holdProgress(now) >= 1) { resetTriggered = true; break; }
+      if (v.holdStart && v.holdProgress(now) >= 1) {
+        Coord.removeAt(v.slot);
+        v.endHold();
+      }
     }
-    if (resetTriggered) {
-      Coord.reset(now);
-      for (let i = 0; i < contexts.length; i++) VIEWS[contexts[i]].endHold();
-    } else {
-      Coord.tick(now, dt); // 推进宠物池(生成/成长/状态切换)
-    }
+    Coord.tick(now, dt); // 推进宠物池(生成/成长/状态切换)
 
     // 池结构变化(生成新宠物/重置) -> 持久化到全局设置,让 PI 能看到
     if (Coord.dirty) { Coord.dirty = false; saveGlobal(); }

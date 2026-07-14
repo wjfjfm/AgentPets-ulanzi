@@ -27,7 +27,8 @@
   const SIZE = 144;
   const CX = 72;
   const BASE_UNIT = 22;
-  const HOLD_RESET_MS = 3000; // 长按 3 秒重置 demo 宠物池
+  const HOLD_DELETE_MS = 2000; // 长按满 2 秒删除当前 Pet
+  const HOLD_SHOW_MS = 500;    // 长按满 0.5 秒才显示倒计时框
   const SCRIM_H = 84;     // 顶部信息带遮罩高度
   const MARGIN_L = 12, MARGIN_R = 132; // 文字左右安全边界
   // 地面基线:宠物的脚(地面阴影)固定落在此 Y,避免小体型(蛋)悬空;
@@ -75,12 +76,21 @@
 
   // ---- 长按状态 ----
   PetView.prototype.beginHold = function (now) { this.holdStart = now; };
+  // 长按进度 0~1(满 1 = 到达删除时间)
   PetView.prototype.holdProgress = function (now) {
     if (!this.holdStart) return 0;
-    return Math.min(1, (now - this.holdStart) / HOLD_RESET_MS);
+    return Math.min(1, (now - this.holdStart) / HOLD_DELETE_MS);
+  };
+  // 是否已达到「显示倒计时框」的时长(0.5s)
+  PetView.prototype.holdVisible = function (now) {
+    return this.holdStart > 0 && (now - this.holdStart) >= HOLD_SHOW_MS;
+  };
+  PetView.prototype.heldMs = function (now) {
+    return this.holdStart ? (now - this.holdStart) : 0;
   };
   PetView.prototype.endHold = function () { this.holdStart = 0; };
-  PetView.prototype.HOLD_RESET_MS = HOLD_RESET_MS;
+  PetView.prototype.HOLD_DELETE_MS = HOLD_DELETE_MS;
+  PetView.prototype.HOLD_SHOW_MS = HOLD_SHOW_MS;
 
   // 头部紧凑时钟格式(H:MM:SS / M:SS / 0:SS)
   function fmtClock(totalSec) {
@@ -271,8 +281,7 @@
     ctx.font = `600 44px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillText('#' + (this.slot + 1), CX, 92);
     ctx.restore();
-    const hp = this.holdProgress(now);
-    if (hp > 0) this.drawHoldRing(ctx, hp);
+    if (this.holdVisible(now)) this.drawHoldRing(ctx, this.holdProgress(now));
     return this.canvas.toDataURL();
   };
 
@@ -347,9 +356,8 @@
       self.drawStatusBadge(c, x, y, r, st, smeta, phase);
     }, meta.agentMsg, '#c6cdd9', 58, 70);
 
-    // ---- 长按重置进度环 ----
-    const hp = this.holdProgress(now);
-    if (hp > 0) this.drawHoldRing(ctx, hp);
+    // ---- 长按删除进度环(满 0.5s 才显示) ----
+    if (this.holdVisible(now)) this.drawHoldRing(ctx, this.holdProgress(now));
 
     return this.canvas.toDataURL();
   };
@@ -366,9 +374,9 @@
     ctx.beginPath(); ctx.arc(0, 0, 28, -Math.PI / 2, -Math.PI / 2 + p * Math.PI * 2); ctx.stroke();
     ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = `bold 22px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillText(Math.ceil((1 - p) * (HOLD_RESET_MS / 1000)) + '', 0, 1);
+    ctx.fillText(Math.ceil((1 - p) * (HOLD_DELETE_MS / 1000)) + '', 0, 1);
     ctx.font = `11px 'Source Han Sans SC', system-ui, sans-serif`;
-    ctx.fillText(this.lang === 'zh' ? '松手重置' : 'reset', 0, 20);
+    ctx.fillText(this.lang === 'zh' ? '松手取消' : 'release', 0, 20);
     ctx.restore();
   };
 

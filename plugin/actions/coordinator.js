@@ -48,13 +48,27 @@
     this.dirty = false; // 结构或数据变化,提示上层需要持久化到全局设置
   }
 
-  // 依据当前占用槽位数,安排下一次生成时间(指数增长后随机)
+  // 依据当前占用宠物数,安排下一次生成时间(指数增长后随机)
   Coordinator.prototype.scheduleNextSpawn = function (now) {
-    this.nextSpawnAt = now + Demo.spawnRandInterval(this.pool.length);
+    this.nextSpawnAt = now + Demo.spawnRandInterval(this.occupancy());
+  };
+
+  // 池中实际存在的宠物数(空洞 null 不计)
+  Coordinator.prototype.occupancy = function () {
+    let n = 0;
+    for (let i = 0; i < this.pool.length; i++) if (this.pool[i]) n++;
+    return n;
+  };
+
+  // 第一个空洞(被删除后留下的 null 槽)索引;没有则返回 -1
+  Coordinator.prototype.firstHole = function () {
+    for (let i = 0; i < this.pool.length; i++) if (!this.pool[i]) return i;
+    return -1;
   };
 
   Coordinator.prototype.init = function (now) {
-    if (this.pool.length === 0) {
+    if (this.occupancy() === 0) {
+      this.pool = [];
       this.pool.push(newMeta(0, now));
     }
     if (!this.nextSpawnAt) this.scheduleNextSpawn(now);
@@ -62,19 +76,36 @@
   };
 
   Coordinator.prototype.spawn = function (now) {
-    if (this.pool.length >= MAX_POOL) return;
-    this.pool.push(newMeta(this.pool.length, now));
+    // 优先填补被删除留下的空洞,让「置空的槽位」等来新宠物;否则追加到池尾
+    const hole = this.firstHole();
+    if (hole >= 0) {
+      this.pool[hole] = newMeta(hole, now);
+    } else {
+      if (this.pool.length >= MAX_POOL) return;
+      this.pool.push(newMeta(this.pool.length, now));
+    }
     this.dirty = true;
+  };
+
+  // 删除单只宠物:仅把该槽位置空(不移位,不影响其它槽位/其它按键),
+  // 只改动 Coordinator 数据;该槽位随后等待新宠物生成填补。
+  Coordinator.prototype.removeAt = function (slot) {
+    if (slot == null || slot < 0 || slot >= this.pool.length) return false;
+    if (!this.pool[slot]) return false;
+    this.pool[slot] = null;
+    this.dirty = true;
+    return true;
   };
 
   // 主循环调用:推进时间(生成新宠物 + 每只宠物成长/回合状态推进)
   Coordinator.prototype.tick = function (now, dtSec) {
-    if (now >= this.nextSpawnAt && this.pool.length < MAX_POOL) {
+    if (now >= this.nextSpawnAt && this.occupancy() < MAX_POOL) {
       this.spawn(now);
       this.scheduleNextSpawn(now);
     }
     for (let i = 0; i < this.pool.length; i++) {
       const m = this.pool[i];
+      if (!m) continue; // 空洞(被删除的槽位),等待新宠物填补
       m.accumSec += dtSec; // 会话存续 -> 持续消耗 token / 成长
 
       // 进化:累计 token 达阈值则按珍稀度倒数加权选子形态前进(级联补进化)并持久化
@@ -111,18 +142,21 @@
 
   Coordinator.prototype.get = function (slot) {
     if (slot == null || slot < 0 || slot >= this.pool.length) return null;
-    return this.pool[slot];
+    return this.pool[slot] || null; // 空洞(被删除)返回 null,按键渲染空槽
   };
 
-  // 供 PI 列出可选槽位的精简摘要
+  // 供 PI 列出可选槽位的精简摘要(跳过被删除的空洞)
   Coordinator.prototype.summaries = function (now) {
     const t = (typeof now === 'number') ? now : 0;
-    return this.pool.map((m) => {
+    const out = [];
+    for (let i = 0; i < this.pool.length; i++) {
+      const m = this.pool[i];
+      if (!m) continue;
       let turnMs = (m.status === 'completed' && typeof m.turnFrozenMs === 'number')
         ? m.turnFrozenMs : (t - m.turnStart);
       if (!(turnMs >= 0)) turnMs = 0;
-      return {
-        slot: m.slot,
+      out.push({
+        slot: i,
         species: m.species,
         form: m.form,
         petName: m.petName,
@@ -132,8 +166,9 @@
         accumSec: Math.round(m.accumSec),
         turnSec: Math.round(turnMs / 1000),
         tokens: Math.round(S.tokensFromSeconds(m.accumSec)),
-      };
-    });
+      });
+    }
+    return out;
   };
 
   Coordinator.prototype.reset = function (now) {
@@ -153,6 +188,7 @@
   Coordinator.prototype.restore = function (data, now) {
     if (!data || !Array.isArray(data.pool) || data.pool.length === 0) return false;
     this.pool = data.pool.map((m, i) => {
+      if (!m) return null; // 保留被删除留下的空洞(不移位,不影响其它槽位)
       const status = (Demo.STATES.includes(m.status) ? m.status : 'running');
       const species = (Art.species.includes(m.species) ? m.species : Art.species[0]);
       // 形态:优先沿用持久化的 form(需属于同物种树),否则按累计 token 重新推导
