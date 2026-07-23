@@ -12,7 +12,7 @@
   ],
   "UUID": "com.ulanzi.ulanzistudio.tokenpet",
   "Type": "JavaScript",
-  "CodePath": "plugin/app.html",
+  "CodePath": "plugin/app.js",
   "Software": {
     "MinVersion": "3.0.0"
   },
@@ -34,6 +34,23 @@
       ],
       "Tooltip": "Raise a pet that grows with your agent's token usage",
       "UUID": "com.ulanzi.ulanzistudio.tokenpet.pet",
+      "SupportedInMultiActions": false,
+      "DisableAutomaticStates": true,
+      "Controllers": ["Keypad"]
+    },
+    {
+      "Name": "Overview",
+      "Icon": "assets/icons/settingsActionIcon.png",
+      "PropertyInspectorPath": "property-inspector/settings/inspector.html",
+      "state": 0,
+      "States": [
+        {
+          "Name": "Overview",
+          "Image": "assets/icons/settingsIcon.png"
+        }
+      ],
+      "Tooltip": "All-pets overview · tap to open home · hold to reorder slots",
+      "UUID": "com.ulanzi.ulanzistudio.tokenpet.settings",
       "SupportedInMultiActions": false,
       "DisableAutomaticStates": true,
       "Controllers": ["Keypad"]

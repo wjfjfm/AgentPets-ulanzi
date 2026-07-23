@@ -23,12 +23,18 @@
   const Art = window.PetArt;
   const Ev = window.PetEvolution;
   const Bg = window.PetBackgrounds;
+  const ArtSets = window.PetArtSets;
+  const Gif = window.PetGif; // 运行时 GIF 引擎(仅服务端;浏览器为 undefined)
+
+  // 美工 id → 程序化兜底 behavior(GIF 缺失时用)
+  const ART_BEHAVIOR = { idle: 'idle', work: 'work', rest: 'sleep', cheer: 'alert' };
 
   const SIZE = 144;
   const CX = 72;
   const BASE_UNIT = 22;
-  const HOLD_DELETE_MS = 2000; // 长按满 2 秒删除当前 Pet
-  const HOLD_SHOW_MS = 500;    // 长按满 0.5 秒才显示倒计时框
+  const HOLD_DELETE_MS = 1000; // 长按满 1 秒删除当前 Pet
+  const HOLD_SHOW_MS = 250;    // 长按满 0.25 秒才显示倒计时框(滚轮);短于此的快速点击 = 单击(打开宠物个人页)
+  const ACTIVATE_SUPPRESS_MS = 500; // 翻页激活后 0.5s 内的 keyup 视为翻页残留,不触发单击
   const SCRIM_H = 84;     // 顶部信息带遮罩高度
   const MARGIN_L = 12, MARGIN_R = 132; // 文字左右安全边界
   // 地面基线:宠物的脚(地面阴影)固定落在此 Y,避免小体型(蛋)悬空;
@@ -44,7 +50,7 @@
   // 品牌色(取自各家官方主色):
   //   Codex→OpenAI 绿 · Claude→Anthropic 陶土橙 · Qoder→官方紫 · Pi→珊瑚
   const AGENT_COLORS = {
-    Codex: '#10a37f', Claude: '#d97757', Qoder: '#8b5cf6', Pi: '#ec6a5e',
+    Codex: '#10a37f', Claude: '#d97757', Qoder: '#8b5cf6', Pi: '#ec6a5e', Kimi: '#12b5a5', Demo: '#5a6675',
   };
 
   function PetView(context) {
@@ -53,6 +59,7 @@
     this.bg = 'none';      // 背景主题(每按键独立)
     this.lang = 'zh';
     this.holdStart = 0;
+    this.activatedAt = 0; // 最近一次因翻页/激活(setactive)而显现的时刻,用于过滤翻页误触
 
     this.canvas = document.createElement('canvas');
     this.canvas.width = SIZE;
@@ -89,6 +96,12 @@
     return this.holdStart ? (now - this.holdStart) : 0;
   };
   PetView.prototype.endHold = function () { this.holdStart = 0; };
+  // ---- 翻页误触过滤(与 SummaryView 一致)----
+  PetView.prototype.markActive = function (now) { this.activatedAt = now; };
+  PetView.prototype.justActivated = function (now) {
+    return this.activatedAt > 0 && (now - this.activatedAt) < ACTIVATE_SUPPRESS_MS;
+  };
+  PetView.prototype.ACTIVATE_SUPPRESS_MS = ACTIVATE_SUPPRESS_MS;
   PetView.prototype.HOLD_DELETE_MS = HOLD_DELETE_MS;
   PetView.prototype.HOLD_SHOW_MS = HOLD_SHOW_MS;
 
@@ -171,7 +184,26 @@
     ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = Math.max(1.3, size * 0.11); ctx.lineCap = 'round';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (agent === 'Claude') {
+    if (agent === 'Demo') {
+      // Demo:白色简笔锥形瓶(与 PI 的 demo 图标一致)
+      ctx.save(); ctx.translate(cx, cy);
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.22, -r * 0.58);
+      ctx.lineTo(-r * 0.22, -r * 0.06);
+      ctx.lineTo(-r * 0.62, r * 0.6);
+      ctx.lineTo(r * 0.62, r * 0.6);
+      ctx.lineTo(r * 0.22, -r * 0.06);
+      ctx.lineTo(r * 0.22, -r * 0.58);
+      ctx.stroke();
+      // 瓶口边沿
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.34, -r * 0.58); ctx.lineTo(r * 0.34, -r * 0.58); ctx.stroke();
+      // 液面
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.4, r * 0.22); ctx.lineTo(r * 0.4, r * 0.22); ctx.stroke();
+      ctx.restore();
+    } else if (agent === 'Claude') {
       // Anthropic「星芒」:一圈由中心向外渐尖的填充射线
       ctx.save(); ctx.translate(cx, cy);
       const rays = 12, inner = r * 0.14, outer = r * 0.84, wBase = size * 0.06;
@@ -259,6 +291,38 @@
     ctx.restore();
   };
 
+  // 统一会话状态提示:画在头部文字带以下、宠物右上侧的角标。
+  //   waiting(暂停/等待输入) -> 红色感叹号(脉动,提示需关注)
+  //   completed(完成/休眠)   -> zzZ(轻微上浮)
+  //   running(工作中)        -> 不额外提示(避免干扰)
+  // 语义与左上角彩色状态徽标一致(双重提示);宠物美工层已移除重复的 ! / zzZ 特效。
+  PetView.prototype.drawStatusHint = function (ctx, st, phase) {
+    if (st === 'waiting') {
+      const pulse = 0.7 + 0.3 * (0.5 + 0.5 * Math.sin(phase * 4));
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
+      ctx.globalAlpha = pulse;
+      ctx.fillStyle = '#e5484d';
+      ctx.font = `900 30px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('!', 120, 110);
+      ctx.restore();
+    } else if (st === 'completed') {
+      const bob = Math.sin(phase * 2) * 1.5;
+      ctx.save();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 4;
+      ctx.fillStyle = '#d3dbe8';
+      ctx.font = `800 11px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('z', 104, 106 + bob);
+      ctx.font = `800 15px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('z', 114, 97 + bob);
+      ctx.font = `800 20px 'Source Han Sans SC', system-ui, sans-serif`;
+      ctx.fillText('Z', 125, 87 + bob);
+      ctx.restore();
+    }
+  };
+
   function drawBackground(ctx) {
     const bg = ctx.createLinearGradient(0, 0, 0, SIZE);
     bg.addColorStop(0, '#24262b');
@@ -267,8 +331,14 @@
     ctx.fillRect(0, 0, SIZE, SIZE);
   }
 
+  // 长按环状态解析:优先用显式 hold(服务端渲染时手势态在插件),否则用本实例的 holdStart。
+  PetView.prototype._holdView = function (now, hold) {
+    if (hold && typeof hold.progress === 'number') return { visible: !!hold.visible, progress: hold.progress };
+    return { visible: this.holdVisible(now), progress: this.holdProgress(now) };
+  };
+
   // 空槽位占位:该按键选中的 slot 尚无宠物(还没生成);背景照常显示
-  PetView.prototype.renderEmpty = function (now, phase) {
+  PetView.prototype.renderEmpty = function (now, phase, hold) {
     const ctx = this.ctx;
     const cfg = { phase: phase, w: SIZE, h: SIZE };
     drawBackground(ctx);
@@ -281,36 +351,109 @@
     ctx.font = `600 44px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillText('#' + (this.slot + 1), CX, 92);
     ctx.restore();
-    if (this.holdVisible(now)) this.drawHoldRing(ctx, this.holdProgress(now));
+    const h = this._holdView(now, hold);
+    if (h.visible) this.drawHoldRing(ctx, h.progress);
     return this.canvas.toDataURL();
   };
 
-  PetView.prototype.render = function (meta, now, phase) {
-    if (!meta) return this.renderEmpty(now, phase);
+  // 重复占用占位:该按键选中的 slot 已由另一(主)按键显示同一宠物;
+  // 此处不重复画宠物,改为提示「重复占用」,避免同一宠物出现在多个窗口。
+  PetView.prototype.renderDuplicate = function (now, phase, hold) {
     const ctx = this.ctx;
-    // 成长由「当前进化形态 + 累计 token」派生(形态决定阶段/部件,token 决定形态内体型)
-    const g = Ev.growth(meta.form, S.tokensFromSeconds(meta.accumSec), meta.species);
-    const st = STATUS[meta.status] ? meta.status : 'running';
-    const smeta = STATUS[st];
     const cfg = { phase: phase, w: SIZE, h: SIZE };
-
     drawBackground(ctx);
     Bg.drawBack(ctx, this.bg, cfg);
+    Bg.drawFront(ctx, this.bg, cfg);
+    ctx.fillStyle = 'rgba(9,10,13,0.55)'; // 暗层弱化背景,突出提示
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(0,0,0,0.7)'; ctx.shadowBlur = 4;
+    ctx.fillStyle = '#c7a94a';
+    ctx.font = `600 40px 'Source Han Sans SC', system-ui, sans-serif`;
+    ctx.fillText('#' + (this.slot + 1), CX, 74);
+    ctx.fillStyle = '#e6be4a';
+    ctx.font = `700 16px 'Source Han Sans SC', system-ui, sans-serif`;
+    ctx.fillText(this.lang === 'zh' ? '重复占用' : 'Duplicate', CX, 102);
+    ctx.fillStyle = '#9aa3b0';
+    ctx.font = `500 11px 'Source Han Sans SC', system-ui, sans-serif`;
+    ctx.fillText(this.lang === 'zh' ? '已在其它键显示' : 'shown on another key', CX, 120);
+    ctx.restore();
+    const h = this._holdView(now, hold);
+    if (h.visible) this.drawHoldRing(ctx, h.progress);
+    return this.canvas.toDataURL();
+  };
 
-    // 宠物本体:脚固定在地面基线(GROUND_Y),小体型不再悬空;过大则向上生长
-    const unit = BASE_UNIT * g.scale;
-    const cy = GROUND_Y - Art.footOffset(meta.species, g, unit);
-    Art.drawPet(ctx, {
-      species: meta.species,
-      growth: g,
-      behavior: smeta.behavior,
-      phase: phase,
-      cx: CX, cy: cy,
-      unit: unit,
-    });
+  // 静态卡片渲染(供网页缩略图):完全复用 render 主体,固定静态 phase=0、无长按滚轮、无 dup。
+  // 调用方需先把 this.bg 设为 'none'(空白背景,不画场景装饰)。
+  // opts.skipPet=true:只画背景+文字层、留空宠物区(网页用原生 <img> GIF 叠加在其上)。
+  PetView.prototype.renderCard = function (meta, opts) {
+    this.holdStart = 0;
+    return this.render(meta, 0, 0, false, null, opts);
+  };
+
+  PetView.prototype.render = function (meta, now, phase, dup, hold, opts) {
+    if (!meta) return this.renderEmpty(now, phase, hold);
+    if (dup) return this.renderDuplicate(now, phase, hold);
+    // 分层模式(供网页把「背景 / GIF 宠物 / 文字层」拆开叠放,层序与设备一致):
+    //   only='scene'  只画背景场景(不画宠物、不画文字层)—— 最底层
+    //   only='chrome' 透明底,只画顶部信息带 + 名字带 + 状态角标 —— 最顶层
+    //   skipPet       画背景与文字层,但留空宠物区(宠物由外层 <img> GIF 叠加)
+    const only = (opts && opts.only) || null;
+    const sceneOnly = only === 'scene';
+    const chromeOnly = only === 'chrome';
+    const skipPet = !!(opts && opts.skipPet) || sceneOnly || chromeOnly;
+    const ctx = this.ctx;
+    // 成长由「当前进化形态 + 累计 token」派生(形态决定等级/兜底体型,token 决定形态内进度)
+    const _tok = (typeof meta.tokens === 'number' && meta.tokens >= 0) ? meta.tokens : 0;
+    const g = Ev.growth(meta.form, _tok, meta.species);
+    const st = STATUS[meta.status] ? meta.status : 'running';
+    const smeta = STATUS[st];
+    // 当前美工:优先持久化的 artSet;缺失/无效则取该状态默认美工(idle 优先)
+    let art = ArtSets.get(meta.form, meta.artSet);
+    if (!art) art = ArtSets.defaultArt(meta.form, st);
+    const cfg = { phase: phase, w: SIZE, h: SIZE };
+
+    if (chromeOnly) {
+      ctx.clearRect(0, 0, SIZE, SIZE); // 透明底,仅叠文字层
+    } else {
+      drawBackground(ctx);
+      Bg.drawBack(ctx, this.bg, cfg);
+    }
+
+    // 宠物本体:优先真实 GIF 当前帧;缺失或浏览器端(skipPet)则程序化兜底。
+    if (!skipPet) {
+      let drew = false;
+      if (art && Gif && Gif.available()) {
+        const fr = Gif.frameAt(meta.species, art.file, now);
+        if (fr) {
+          const prevSmooth = ctx.imageSmoothingEnabled;
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(fr, 0, 0, SIZE, SIZE);
+          ctx.imageSmoothingEnabled = prevSmooth;
+          drew = true;
+        }
+      }
+      if (!drew) {
+        // 程序化兜底(GIF 不可用):美工 id 映射 behavior,脚固定在地面基线
+        const behavior = (art && ART_BEHAVIOR[art.id]) || smeta.behavior;
+        const unit = BASE_UNIT * g.scale;
+        const cy = GROUND_Y - Art.footOffset(meta.species, g, unit);
+        Art.drawPet(ctx, {
+          species: meta.species,
+          growth: g,
+          behavior: behavior,
+          variant: g.variant,
+          phase: phase,
+          cx: CX, cy: cy,
+          unit: unit,
+        });
+      }
+    }
 
     // 前景层(盖在宠物之上,UI 文字之下)
-    Bg.drawFront(ctx, this.bg, cfg);
+    if (!chromeOnly) Bg.drawFront(ctx, this.bg, cfg);
+    if (sceneOnly) return this.canvas.toDataURL(); // 背景层到此为止(文字/宠物不画)
 
     // 顶部信息带遮罩
     const scrim = ctx.createLinearGradient(0, 0, 0, SCRIM_H);
@@ -326,7 +469,8 @@
     const sidX = MARGIN_L + iconSize + 5;   // session id 起始 x
     const sidW = 44;                        // session id 固定占位宽度
     const timeLeft = sidX + sidW;           // 时间可用区域左界
-    drawAgentIcon(ctx, MARGIN_L + iconSize / 2, headY - 4, iconSize, meta.agent);
+    const isDemoPet = meta.location === 'demo' || (meta.key && meta.key.indexOf('demo:') === 0);
+    drawAgentIcon(ctx, MARGIN_L + iconSize / 2, headY - 4, iconSize, isDemoPet ? 'Demo' : meta.agent);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.85)'; ctx.shadowBlur = 3;
     ctx.textBaseline = 'alphabetic';
@@ -338,7 +482,7 @@
     ctx.textAlign = 'left';
     ctx.font = `9px 'Source Han Sans SC', system-ui, sans-serif`;
     ctx.fillStyle = '#c2c9d4';
-    ctx.fillText(meta.sid, sidX, headY);
+    ctx.fillText((function (s) { s = String(s || ''); return s.length <= 6 ? s : s.slice(-6); })(meta.sid), sidX, headY);
     ctx.restore();
     // 本轮对话时长 在 session id 右侧的剩余空间居中
     ctx.textAlign = 'center';
@@ -356,10 +500,104 @@
       self.drawStatusBadge(c, x, y, r, st, smeta, phase);
     }, meta.agentMsg, '#c6cdd9', 58, 70);
 
+    // ---- 底部信息带:物种 · 宠物名 · 等级 ----
+    const bScrim = ctx.createLinearGradient(0, SIZE - 26, 0, SIZE);
+    bScrim.addColorStop(0, 'rgba(9,10,13,0)');
+    bScrim.addColorStop(1, 'rgba(9,10,13,0.82)');
+    ctx.fillStyle = bScrim;
+    ctx.fillRect(0, SIZE - 26, SIZE, 26);
+
+    // 等级由软件端权威下发(meta.level);缺失时(旧数据/离线)本地兜底走同一 levelOf。
+    let level = (typeof meta.level === 'number') ? meta.level : Ev.levelOf(g.form || meta.form, _tok, meta.species);
+    const species = Ev.formName(g.form || meta.form, this.lang) || (meta.species || '');
+    const petName = meta.petName || meta.agent || 'Pet';
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 3;
+    ctx.font = `600 11px 'Source Han Sans SC', system-ui, sans-serif`;
+    // 组合行:名字亮、物种/等级次亮;超宽时对名字做截断
+    const lvStr = ' · Lv' + level;
+    const spStr = species ? (species + ' · ') : '';
+    const maxW = SIZE - 16;
+    let nm = petName;
+    while (nm.length > 1 && ctx.measureText(spStr + nm + lvStr).width > maxW) nm = nm.slice(0, -1);
+    if (nm !== petName) nm += '…';
+    const full = spStr + nm + lvStr;
+    const totalW = ctx.measureText(full).width;
+    let x = CX - totalW / 2;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9aa3b0';
+    ctx.fillText(spStr, x, SIZE - 8); x += ctx.measureText(spStr).width;
+    ctx.fillStyle = '#eef2f7';
+    ctx.fillText(nm, x, SIZE - 8); x += ctx.measureText(nm).width;
+    // 满级(已达终态、无法再进化)等级显示为红色,否则绿色。
+    ctx.fillStyle = g.isMax ? '#e5544b' : '#7fd39a';
+    ctx.fillText(lvStr, x, SIZE - 8);
+    ctx.restore();
+
+    // ---- 统一会话状态提示(文字带以下、宠物右上侧):waiting=红色感叹号 / completed=zzZ ----
+    // 与左上角彩色状态徽标同义,构成双重提示(颜色 + 符号)。
+    this.drawStatusHint(ctx, st, phase);
+
+    // ---- 断开连接标记(叠加在已渲染的「最后已知状态」之上,不改动其内容) ----
+    if (meta.disconnected) this.drawDisconnected(ctx, phase);
+
     // ---- 长按删除进度环(满 0.5s 才显示) ----
-    if (this.holdVisible(now)) this.drawHoldRing(ctx, this.holdProgress(now));
+    const _h = this._holdView(now, hold);
+    if (_h.visible) this.drawHoldRing(ctx, _h.progress);
 
     return this.canvas.toDataURL();
+  };
+
+  // 断开连接叠加层:在「最后已知状态」之上加离线提示,不覆盖头/名信息带。
+  PetView.prototype.drawDisconnected = function (ctx, phase) {
+    const AMBER = '#e5a13a';
+    const pulse = 0.55 + 0.25 * (0.5 + 0.5 * Math.sin(phase * 3));
+    ctx.save();
+    // (1) 仅对宠物本体区域做冷色压暗(头部信息带 y<20、底部名带 y>SIZE-26 保持清晰)
+    ctx.fillStyle = 'rgba(18,22,30,0.34)';
+    ctx.fillRect(0, 20, SIZE, SIZE - 26 - 20);
+    // (2) 琥珀色内缩边框:整键离线信号
+    ctx.globalAlpha = pulse;
+    ctx.strokeStyle = AMBER;
+    ctx.lineWidth = 3;
+    roundRect(ctx, 3, 3, SIZE - 6, SIZE - 6, 10);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+    ctx.restore();
+
+    // (3) 右上角琥珀胶囊:断链图标 + 短标签
+    const label = this.lang === 'zh' ? '离线' : 'OFF';
+    ctx.save();
+    ctx.font = `700 9px 'Source Han Sans SC', system-ui, sans-serif`;
+    const tw = ctx.measureText(label).width;
+    const padX = 5, gap = 4, iconW = 9;
+    const pillH = 15;
+    const pillW = padX + iconW + gap + tw + padX;
+    const px = SIZE - 4 - pillW;
+    const py = 3;
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 3;
+    ctx.fillStyle = AMBER;
+    roundRect(ctx, px, py, pillW, pillH, pillH / 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    // 断链图标(两段圆角短杠 + 断口斜线)
+    const ix = px + padX, iy = py + pillH / 2;
+    ctx.strokeStyle = '#1a1205'; ctx.lineCap = 'round';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(ix, iy + 2.5); ctx.lineTo(ix + 3, iy - 0.5);
+    ctx.moveTo(ix + iconW - 3, iy + 0.5); ctx.lineTo(ix + iconW, iy - 2.5);
+    ctx.stroke();
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(ix + iconW / 2 - 2, iy - 3.5); ctx.lineTo(ix + iconW / 2 + 2, iy + 3.5);
+    ctx.stroke();
+    // 标签
+    ctx.fillStyle = '#1a1205';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, ix + iconW + gap, iy + 0.5);
+    ctx.restore();
   };
 
   PetView.prototype.drawHoldRing = function (ctx, p) {
@@ -381,6 +619,4 @@
   };
 
   window.PetView = PetView;
-  // 兼容旧引用
-  window.Pet = PetView;
 })();

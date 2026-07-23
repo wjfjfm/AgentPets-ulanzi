@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+    content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,minimal-ui,viewport-fit=cover" />
+  <title>Overview</title>
+  <link rel="stylesheet" href="../../libs/css/uspi.css">
+  <style>
+    * { box-sizing: border-box; }
+    .uspi-wrapper { padding: 14px 12px; text-align: center; }
+    .gs-note { font-size: 12px; color: #97a0ad; line-height: 1.7; margin: 8px 0 14px; }
+    .gs-open {
+      display: inline-block; padding: 8px 18px; border-radius: 8px; cursor: pointer;
+      border: 1px solid rgba(74, 157, 240, 0.5); background: rgba(74, 157, 240, 0.18);
+      color: #bcd8ff; font-size: 13px;
+    }
+    .gs-open:hover { background: rgba(74, 157, 240, 0.3); color: #fff; }
+    .gs-off { font-size: 11px; color: #6d7683; margin-top: 10px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="uspi-wrapper hidden">
+    <div class="gs-note">
+      全局总览:显示所有宠物汇总状态。<br>
+      <b>单击</b>打开 AgentPets 主页 · <b>长按</b>重排槽位。<br>
+      数据源与宠物管理请在 <b>AgentPets 软件</b>内操作。
+    </div>
+    <button type="button" class="gs-open" id="openSettings">打开 AgentPets 主页</button>
+    <div class="gs-off hidden" id="offlineTip">AgentPets 软件未运行,请先启动软件。</div>
+  </div>
+
+  <script src="../../libs/js/constants.js"></script>
+  <script src="../../libs/js/eventEmitter.js"></script>
+  <script src="../../libs/js/timers.js"></script>
+  <script src="../../libs/js/utils.js"></script>
+  <script src="../../libs/js/ulanziApi.js"></script>
+
+  <script src="./inspector.js"></script>
+</body>
+</html>

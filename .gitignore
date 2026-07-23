@@ -3,3 +3,8 @@ node_modules/
 *.log
 .petpreview/
 .iconbuild/
+.deploy-trash/
+.plugin-test.out
+_ignore_test.cjs
+_thumbtest.cjs
+_thumb1.png

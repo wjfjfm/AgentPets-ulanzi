@@ -1,0 +1,14 @@
+{
+  "name": "agent-pets",
+  "version": "1.0.0",
+  "description": "Agent Pets - Ulanzi Studio Node main service",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node plugin/app.js"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^0.1.60",
+    "ws": "^8.18.0"
+  }
+}
